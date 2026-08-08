@@ -3,7 +3,9 @@ Description=nginx fleet exporter
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/nginx-fleet-exporter --vrrp=auto
+ExecStart=/usr/local/bin/nginx-fleet-exporter --vrrp=auto --ingress.access-log=/var/log/nginx/fleet.log
+# Writable exception to ProtectSystem=strict for the idle-clock state file.
+StateDirectory=nginx-fleet-exporter
 Restart=on-failure
 User=nginx-exporter
 # CAP_NET_RAW: passive VRRP AF_PACKET socket. Add CAP_BPF+CAP_PERFMON only if
