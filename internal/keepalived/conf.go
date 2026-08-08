@@ -12,11 +12,12 @@ import (
 
 // Instance is one vrrp_instance block.
 type Instance struct {
-	Name     string
-	VRID     int
-	Priority int
-	VIPs     []string
-	Unicast  bool // unicast_peer present: multicast listening won't hear peers
+	Name      string
+	VRID      int
+	Priority  int
+	Interface string // interface the instance runs on; its subnet is the segment
+	VIPs      []string
+	Unicast   bool // unicast_peer present: multicast listening won't hear peers
 }
 
 // ParseFile reads keepalived.conf. A missing file returns (nil, nil): not
@@ -62,6 +63,8 @@ func parse(text string) []Instance {
 			cur.VRID, _ = strconv.Atoi(f[1])
 		case cur != nil && len(f) >= 2 && f[0] == "priority":
 			cur.Priority, _ = strconv.Atoi(f[1])
+		case cur != nil && len(f) >= 2 && f[0] == "interface":
+			cur.Interface = f[1]
 		case cur != nil && len(f) >= 1 && strings.HasPrefix(f[0], "unicast_peer"):
 			cur.Unicast = true
 		}

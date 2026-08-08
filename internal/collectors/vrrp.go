@@ -34,8 +34,9 @@ var (
 		[]string{"vrid", "node", "observer"}, nil)
 	clusterInfoDesc = prometheus.NewDesc("nginx_fleet_cluster_info",
 		"Cluster membership from local keepalived.conf: this node participates in the VRID. "+
-			"Passive VRRP cannot see silent backups; membership comes from config, mastership from the wire.",
-		[]string{"vrid", "vip", "member_node", "instance"}, nil)
+			"Passive VRRP cannot see silent backups; membership comes from config, mastership from the wire. "+
+			"Group clusters by (segment, vrid): VRIDs are only unique per L2 segment.",
+		[]string{"vrid", "vip", "member_node", "instance", "segment"}, nil)
 	unicastDesc = prometheus.NewDesc("nginx_fleet_vrrp_unicast_configured",
 		"1 if the instance uses unicast_peer: peer adverts may not be visible to multicast observers.",
 		[]string{"vrid", "instance"}, nil)
@@ -87,8 +88,9 @@ func (c *VRRPCollector) Collect(ch chan<- prometheus.Metric) {
 	// Membership is config-derived: valid even when the wire listener is off.
 	for _, inst := range c.Instances {
 		v := strconv.Itoa(inst.VRID)
+		segment := keepalived.SegmentForInterface(inst.Interface)
 		for _, vip := range inst.VIPs {
-			ch <- prometheus.MustNewConstMetric(clusterInfoDesc, prometheus.GaugeValue, 1, v, vip, c.Hostname, inst.Name)
+			ch <- prometheus.MustNewConstMetric(clusterInfoDesc, prometheus.GaugeValue, 1, v, vip, c.Hostname, inst.Name, segment)
 		}
 		if inst.Unicast {
 			ch <- prometheus.MustNewConstMetric(unicastDesc, prometheus.GaugeValue, 1, v, inst.Name)

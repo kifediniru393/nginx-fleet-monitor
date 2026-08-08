@@ -37,7 +37,7 @@ vrrp_instance VI_2 {
 }
 `)
 	want := []Instance{
-		{Name: "VI_1", VRID: 51, Priority: 255, VIPs: []string{"192.168.2.154"}},
+		{Name: "VI_1", VRID: 51, Priority: 255, Interface: "eth0", VIPs: []string{"192.168.2.154"}},
 		{Name: "VI_2", VRID: 52, Priority: 100, VIPs: []string{"10.0.0.100", "10.0.0.101"}, Unicast: true},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -49,5 +49,18 @@ func TestParseFileMissing(t *testing.T) {
 	inst, err := ParseFile("/nonexistent/keepalived.conf")
 	if inst != nil || err != nil {
 		t.Fatalf("missing file should be (nil, nil), got %v %v", inst, err)
+	}
+}
+
+func TestParseInterface(t *testing.T) {
+	inst := parse("vrrp_instance V {\n interface eth0\n virtual_router_id 7\n}\n")
+	if len(inst) != 1 || inst[0].Interface != "eth0" || inst[0].VRID != 7 {
+		t.Fatalf("got %+v", inst)
+	}
+}
+
+func TestSegmentForInterfaceMissing(t *testing.T) {
+	if s := SegmentForInterface("definitely-not-an-iface0"); s != "" {
+		t.Fatalf("got %q", s)
 	}
 }
