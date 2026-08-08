@@ -14,16 +14,18 @@ Design: see `nginx-fleet-exporter-plan.md` (revision 3).
 
 ## Ingress collector setup
 
-The one permitted piece of nginx config coupling — add to `http {}`:
+**No existing conf file is modified.** The required `log_format` ships as an
+additive drop-in (`deploy/zz-fleet-logging.conf`) for the standard
+`include /etc/nginx/conf.d/*.conf`:
 
-```nginx
-log_format fleet escape=json '{"host":"$host","upstream":"$upstream_addr",'
-    '"bytes_sent":$bytes_sent,"request_length":$request_length,'
-    '"status":$status,"upstream_time":"$upstream_response_time"}';
-access_log /var/log/nginx/fleet.log fleet;
+```
+scp deploy/zz-fleet-logging.conf <host>:/etc/nginx/conf.d/
+nginx -t && nginx -s reload
 ```
 
-Then run with `--ingress.access-log=/var/log/nginx/fleet.log`. The tailer
+nginx writes to every configured `access_log`, so existing logs continue
+unchanged; removing the drop-in fully reverts. Then run the exporter with
+`--ingress.access-log=/var/log/nginx/fleet.log`. The tailer
 starts at end-of-file, survives logrotate (inode change) and truncation, and
 retries if the file disappears. Retried requests (`proxy_next_upstream`) count
 every non-final attempt as an empirical failure for that member.
