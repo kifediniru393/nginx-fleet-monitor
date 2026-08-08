@@ -48,12 +48,18 @@ func Listen(ctx context.Context, tr *Tracker) error {
 			continue
 		}
 		ihl := int(pkt[0]&0x0f) * 4
-		if len(pkt) < ihl {
+		totLen := int(pkt[2])<<8 | int(pkt[3])
+		if totLen > len(pkt) {
+			totLen = len(pkt)
+		}
+		if totLen < ihl {
 			continue
 		}
 		src, _ := netip.AddrFromSlice(pkt[12:16])
 		dst, _ := netip.AddrFromSlice(pkt[16:20])
-		if a, err := Parse(pkt[ihl:], src, dst); err == nil {
+		// Trim to IP total length: frames shorter than Ethernet minimum are
+		// padded, and padding would break the v2 full-message checksum.
+		if a, err := Parse(pkt[ihl:totLen], src, dst); err == nil {
 			tr.Observe(a, time.Now())
 		}
 	}

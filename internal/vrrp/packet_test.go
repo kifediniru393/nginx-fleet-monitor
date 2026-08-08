@@ -15,16 +15,17 @@ var (
 )
 
 // buildV2 constructs a valid VRRPv2 advert: interval in whole seconds,
-// checksum over the VRRP fields only, 8 trailing auth bytes.
+// RFC 3768 checksum over the entire message including the 8 auth bytes.
 func buildV2(vrid, prio uint8, intervalSec byte, vips ...netip.Addr) []byte {
-	p := []byte{0x21, vrid, prio, byte(len(vips)), 0, intervalSec, 0, 0}
+	p := []byte{0x21, vrid, prio, byte(len(vips)), 1 /* authtype simple */, intervalSec, 0, 0}
 	for _, v := range vips {
 		a := v.As4()
 		p = append(p, a[:]...)
 	}
+	p = append(p, []byte("password")...) // auth data
 	ck := inetChecksum(p)
 	p[6], p[7] = byte(ck>>8), byte(ck)
-	return append(p, make([]byte, 8)...) // auth data
+	return p
 }
 
 // buildV3 constructs a valid VRRPv3 advert: 12-bit centisecond interval,

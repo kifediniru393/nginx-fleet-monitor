@@ -62,7 +62,10 @@ func Parse(payload []byte, src, dst netip.Addr) (*Advert, error) {
 		if len(payload) < need {
 			return nil, ErrTruncated
 		}
-		if inetChecksum(payload[:8+4*count]) != 0 {
+		// RFC 3768: checksum covers the entire VRRP message, auth data
+		// included. Callers must trim payload to the IP total length first —
+		// Ethernet padding after the message would break this.
+		if inetChecksum(payload[:need]) != 0 {
 			return nil, ErrBadChecksum
 		}
 	case 3:

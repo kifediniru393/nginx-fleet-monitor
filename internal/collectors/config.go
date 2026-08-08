@@ -27,10 +27,13 @@ var (
 )
 
 // ConfigCollector runs `nginx -T` at most once per interval and serves the
-// parsed topology from memory at scrape time.
+// parsed topology from memory at scrape time. If nginx -T fails (typically:
+// unprivileged user cannot read TLS keys that -T validates), it falls back to
+// parsing the config from disk with include resolution.
 type ConfigCollector struct {
-	cmd      []string
-	interval time.Duration
+	cmd          []string
+	fallbackPath string
+	interval     time.Duration
 
 	mu       sync.Mutex
 	cfg      *nginxconf.Config
@@ -38,8 +41,8 @@ type ConfigCollector struct {
 	failures float64
 }
 
-func NewConfigCollector(cmd []string, interval time.Duration) *ConfigCollector {
-	return &ConfigCollector{cmd: cmd, interval: interval}
+func NewConfigCollector(cmd []string, fallbackPath string, interval time.Duration) *ConfigCollector {
+	return &ConfigCollector{cmd: cmd, fallbackPath: fallbackPath, interval: interval}
 }
 
 // Config returns the current parsed config (may be nil before first success).
@@ -54,14 +57,20 @@ func (c *ConfigCollector) refreshLocked() {
 	if time.Since(c.fetched) < c.interval && c.cfg != nil {
 		return
 	}
-	out, err := exec.Command(c.cmd[0], c.cmd[1:]...).Output()
 	c.fetched = time.Now()
+	out, err := exec.Command(c.cmd[0], c.cmd[1:]...).Output()
+	text := string(out)
 	if err != nil {
-		c.failures++
-		slog.Warn("nginx -T failed", "cmd", c.cmd, "err", err)
-		return
+		if c.fallbackPath != "" {
+			text, err = nginxconf.LoadFromDisk(c.fallbackPath)
+		}
+		if err != nil {
+			c.failures++
+			slog.Warn("config unavailable via nginx -T and disk fallback", "cmd", c.cmd, "fallback", c.fallbackPath, "err", err)
+			return
+		}
 	}
-	c.cfg = nginxconf.Parse(string(out))
+	c.cfg = nginxconf.Parse(text)
 }
 
 func (c *ConfigCollector) Describe(ch chan<- *prometheus.Desc) {
