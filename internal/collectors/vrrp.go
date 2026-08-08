@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/techmoose/nginx-fleet-exporter/internal/keepalived"
 	"github.com/techmoose/nginx-fleet-exporter/internal/vrrp"
 )
 
@@ -31,6 +32,13 @@ var (
 	vrrpStepdownDesc = prometheus.NewDesc("nginx_fleet_vrrp_stepdown",
 		"1 if the last advert was a priority-0 graceful stepdown (VIP about to move).",
 		[]string{"vrid", "node", "observer"}, nil)
+	clusterInfoDesc = prometheus.NewDesc("nginx_fleet_cluster_info",
+		"Cluster membership from local keepalived.conf: this node participates in the VRID. "+
+			"Passive VRRP cannot see silent backups; membership comes from config, mastership from the wire.",
+		[]string{"vrid", "vip", "member_node", "instance"}, nil)
+	unicastDesc = prometheus.NewDesc("nginx_fleet_vrrp_unicast_configured",
+		"1 if the instance uses unicast_peer: peer adverts may not be visible to multicast observers.",
+		[]string{"vrid", "instance"}, nil)
 	activeDesc = prometheus.NewDesc("nginx_fleet_active",
 		"1 if this node is currently the active/serving node.", []string{"node", "method"}, nil)
 )
@@ -40,10 +48,11 @@ var (
 // only vrrp_enabled=0 plus a static active=1 — the rest of the exporter is
 // unaffected.
 type VRRPCollector struct {
-	Tracker  *vrrp.Tracker
-	Enabled  func() bool
-	Hostname string
-	localIPs map[netip.Addr]bool
+	Tracker   *vrrp.Tracker
+	Enabled   func() bool
+	Hostname  string
+	Instances []keepalived.Instance // local keepalived.conf membership
+	localIPs  map[netip.Addr]bool
 }
 
 func NewVRRPCollector(tr *vrrp.Tracker, enabled func() bool, hostname string) *VRRPCollector {
@@ -61,6 +70,8 @@ func NewVRRPCollector(tr *vrrp.Tracker, enabled func() bool, hostname string) *V
 }
 
 func (c *VRRPCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- clusterInfoDesc
+	ch <- unicastDesc
 	ch <- vrrpEnabledDesc
 	ch <- vrrpMasterDesc
 	ch <- vrrpPriorityDesc
@@ -73,6 +84,16 @@ func (c *VRRPCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *VRRPCollector) Collect(ch chan<- prometheus.Metric) {
+	// Membership is config-derived: valid even when the wire listener is off.
+	for _, inst := range c.Instances {
+		v := strconv.Itoa(inst.VRID)
+		for _, vip := range inst.VIPs {
+			ch <- prometheus.MustNewConstMetric(clusterInfoDesc, prometheus.GaugeValue, 1, v, vip, c.Hostname, inst.Name)
+		}
+		if inst.Unicast {
+			ch <- prometheus.MustNewConstMetric(unicastDesc, prometheus.GaugeValue, 1, v, inst.Name)
+		}
+	}
 	if !c.Enabled() {
 		ch <- prometheus.MustNewConstMetric(vrrpEnabledDesc, prometheus.GaugeValue, 0)
 		// Without VRRP there is no VIP: this node is always serving.
