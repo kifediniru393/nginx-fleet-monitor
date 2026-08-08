@@ -116,3 +116,11 @@ func TestCardinalityCap(t *testing.T) {
 		t.Fatalf("cap accounting wrong: %v", s.Requests)
 	}
 }
+
+func TestIngestNegativeBytesIgnored(t *testing.T) {
+	s := NewStats(100)
+	s.Ingest(`{"host":"a","upstream":"-","bytes_sent":-5,"request_length":-1,"status":200,"upstream_time":"-"}`, t0)
+	if s.BytesSent[vhostKey{"a"}] != 0 || s.BytesReceived[vhostKey{"a"}] != 0 {
+		t.Fatalf("negative bytes corrupted counters: %d/%d", s.BytesSent[vhostKey{"a"}], s.BytesReceived[vhostKey{"a"}])
+	}
+}

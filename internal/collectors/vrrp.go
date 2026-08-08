@@ -29,6 +29,9 @@ var (
 	vrrpTransitionsDesc = prometheus.NewDesc("nginx_fleet_vrrp_transitions_total",
 		"Master transitions per VRID, including initial election (empty from_node).",
 		[]string{"vrid", "from_node", "to_node", "observer"}, nil)
+	vrrpDroppedDesc = prometheus.NewDesc("nginx_fleet_vrrp_transitions_dropped_total",
+		"Transition observations discarded by the cardinality cap (spoofed-advert flood guard).",
+		[]string{"observer"}, nil)
 	vrrpStepdownsTotalDesc = prometheus.NewDesc("nginx_fleet_vrrp_stepdowns_total",
 		"Graceful (priority-0) stepdowns observed per VRID — the durable record; the gauge below is often too brief to scrape.",
 		[]string{"vrid", "observer"}, nil)
@@ -85,6 +88,7 @@ func (c *VRRPCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- vrrpTransitionsDesc
 	ch <- vrrpStepdownDesc
 	ch <- vrrpStepdownsTotalDesc
+	ch <- vrrpDroppedDesc
 	ch <- activeDesc
 }
 
@@ -148,5 +152,6 @@ func (c *VRRPCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(vrrpTransitionsDesc, prometheus.CounterValue, float64(n),
 			strconv.Itoa(int(tr.VRID)), from, tr.To.String(), obs)
 	}
+	ch <- prometheus.MustNewConstMetric(vrrpDroppedDesc, prometheus.CounterValue, float64(c.Tracker.Dropped()), obs)
 	ch <- prometheus.MustNewConstMetric(activeDesc, prometheus.GaugeValue, active, c.Hostname, "vrrp")
 }

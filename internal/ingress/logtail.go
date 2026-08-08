@@ -95,8 +95,14 @@ func (s *Stats) Ingest(raw string, now time.Time) {
 		s.Requests[vh] = map[string]uint64{}
 	}
 	s.Requests[vh][statusClass(l.Status)]++
-	s.BytesSent[vh] += uint64(l.BytesSent)
-	s.BytesReceived[vh] += uint64(l.RequestLength)
+	// Guard negatives: uint64(-1) would jump the counter by 2^64-1. Log lines
+	// are semi-trusted (nginx writes them, but fields echo client input).
+	if l.BytesSent > 0 {
+		s.BytesSent[vh] += uint64(l.BytesSent)
+	}
+	if l.RequestLength > 0 {
+		s.BytesReceived[vh] += uint64(l.RequestLength)
+	}
 	s.VhostLastSeen[vh] = now
 
 	// $upstream_addr is a comma/colon separated attempt list when

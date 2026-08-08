@@ -41,6 +41,7 @@ type Tracker struct {
 	vrids       map[uint8]*VRIDState
 	transitions map[Transition]uint64
 	stepdowns   map[uint8]uint64 // priority-0 adverts seen, per VRID
+	dropped     uint64           // transitions discarded by the cardinality cap
 }
 
 func NewTracker() *Tracker {
@@ -59,10 +60,10 @@ func (t *Tracker) Observe(a *Advert, now time.Time) {
 	if !ok {
 		s = &VRIDState{}
 		t.vrids[a.VRID] = s
-		t.transitions[Transition{VRID: a.VRID, To: a.Src}]++
+		t.count(Transition{VRID: a.VRID, To: a.Src})
 	} else if s.Master != a.Src {
 		// A different node advertising is a takeover — count it once.
-		t.transitions[Transition{VRID: a.VRID, From: s.Master, To: a.Src}]++
+		t.count(Transition{VRID: a.VRID, From: s.Master, To: a.Src})
 	}
 	s.Master = a.Src
 	s.Priority = a.Priority
@@ -79,6 +80,28 @@ func (t *Tracker) Observe(a *Advert, now time.Time) {
 	if a.Interval > 0 {
 		s.Interval = a.Interval
 	}
+}
+
+// maxTransitionKeys bounds the transitions map. VRRP is unauthenticated: an
+// attacker on the segment can advertise from arbitrary spoofed sources, and
+// without a cap each new (from, to) pair is a map entry and a metric series —
+// an unbounded memory and cardinality attack. Legitimate fleets see a handful
+// of pairs; overflow lands in Dropped rather than new series.
+const maxTransitionKeys = 1024
+
+func (t *Tracker) count(tr Transition) {
+	if _, ok := t.transitions[tr]; !ok && len(t.transitions) >= maxTransitionKeys {
+		t.dropped++
+		return
+	}
+	t.transitions[tr]++
+}
+
+// Dropped reports transition observations discarded by the cardinality cap.
+func (t *Tracker) Dropped() uint64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.dropped
 }
 
 // Stepdowns returns per-VRID counts of graceful (priority-0) stepdowns.
