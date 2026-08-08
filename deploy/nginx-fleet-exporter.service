@@ -1,0 +1,18 @@
+[Unit]
+Description=nginx fleet exporter
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/nginx-fleet-exporter --vrrp=auto
+Restart=on-failure
+User=nginx-exporter
+# CAP_NET_RAW: passive VRRP AF_PACKET socket. Add CAP_BPF+CAP_PERFMON only if
+# the eBPF ingress path is deployed (Phase 2).
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

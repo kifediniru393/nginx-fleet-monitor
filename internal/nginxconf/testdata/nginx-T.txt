@@ -1,0 +1,42 @@
+# configuration file /etc/nginx/nginx.conf:
+user nginx;
+worker_processes 4;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream app_backend {
+        server 10.1.1.100:8080 max_fails=3;
+        server 10.1.1.101:8080 backup;
+    }
+
+    include /etc/nginx/conf.d/*.conf;
+}
+
+# configuration file /etc/nginx/conf.d/site-a.conf:
+server {
+    listen 443 ssl default_server;
+    listen 80;
+    server_name a.example.com www.a.example.com;
+
+    location / {
+        proxy_pass http://app_backend;
+    }
+}
+
+# configuration file /etc/nginx/conf.d/site-b.conf:
+server {
+    listen 10.0.0.5:443 ssl;
+    server_name b.example.com *.b.example.com;
+    location / {
+        proxy_pass http://10.1.1.100:9090/api;
+    }
+}
+
+# configuration file /etc/nginx/conf.d/legacy.conf:
+server {
+    listen 8081;
+    # no server_name, no pass — static legacy site
+}
