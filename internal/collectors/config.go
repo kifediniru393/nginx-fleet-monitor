@@ -17,7 +17,7 @@ import (
 var (
 	vhostInfoDesc = prometheus.NewDesc("nginx_fleet_vhost_info",
 		"Intended routing topology from the running nginx config (nginx -T).",
-		[]string{"vhost", "listen_addr", "listen_port", "tls", "backend_addr", "config_file"}, nil)
+		[]string{"vhost", "listen_addr", "listen_port", "tls", "upstream_addr", "config_file"}, nil)
 	workerProcsDesc = prometheus.NewDesc("nginx_fleet_worker_processes",
 		"Configured worker_processes (0 = auto/unknown).", nil, nil)
 	workerConnsDesc = prometheus.NewDesc("nginx_fleet_worker_connections_limit",

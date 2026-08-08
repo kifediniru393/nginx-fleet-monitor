@@ -21,7 +21,7 @@ groups:
           severity: info
         annotations:
           summary: >-
-            Upstream {{ $labels.backend_addr }} (vhost {{ $labels.vhost }}) has
+            Upstream {{ $labels.upstream_addr }} (vhost {{ $labels.vhost }}) has
             served no traffic for over 5 days — decommission candidate.
 
       - alert: NginxVhostDecommissionCandidate

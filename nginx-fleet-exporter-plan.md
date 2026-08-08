@@ -116,7 +116,7 @@ Extract per `server` block:
 | source | file + line, for debuggability |
 
 ```
-nginx_fleet_vhost_info{vhost, listen_addr, listen_port, tls, upstream, backend_addr, config_file} 1
+nginx_fleet_vhost_info{vhost, listen_addr, listen_port, tls, upstream, upstream_addr, config_file} 1
 ```
 
 This is the **intended** routing graph. It supplies the *expected* vhost and upstream-member lists that the hygiene metrics (§4.5) diff against runtime observation.
@@ -173,7 +173,7 @@ Joins §4.1 intent against §4.2–4.3 observation. All evidence-based.
 **Backends actually receiving traffic (goal 3):**
 
 ```
-nginx_fleet_backend_active{vhost, backend_addr}    # 1 if observed receiving traffic in the last interval
+nginx_fleet_backend_active{vhost, upstream_addr}    # 1 if observed receiving traffic in the last interval
 ```
 
 Two drift alerts fall out of the join: configured backends never seeing traffic, and observed traffic to backends absent from config.
@@ -182,7 +182,7 @@ Two drift alerts fall out of the join: configured backends never seeing traffic,
 
 ```
 nginx_fleet_vhost_last_traffic_timestamp_seconds{vhost}
-nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost, backend_addr}
+nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost, upstream_addr}
 ```
 
 Absent/0 = never observed. Recording rules turn these into "idle for N days" decommission-candidate lists. **The observation window must span batch and monthly traffic patterns** — do not decommission on a two-week window.
@@ -192,8 +192,8 @@ Absent/0 = never observed. Recording rules turn these into "idle for N days" dec
 **Down-upstream flagging:**
 
 ```
-nginx_fleet_upstream_up{vhost, backend_addr}                       # gauge, from empirical failure evidence
-nginx_fleet_upstream_failures_total{vhost, backend_addr, reason}   # connect_error, http_502, http_503, http_504, timeout
+nginx_fleet_upstream_up{vhost, upstream_addr}                       # gauge, from empirical failure evidence
+nginx_fleet_upstream_failures_total{vhost, upstream_addr, reason}   # connect_error, http_502, http_503, http_504, timeout
 ```
 
 Derived from per-backend connect errors and 502/503/504s (logs or eBPF, per the Phase 1 winner), plus nginx's passive health state (`max_fails` trips) where observable. Alertable. Whether a mechanism can expose **per-backend** errors and latency — not just per-vhost — is a Phase 1 evaluation criterion.
