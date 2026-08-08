@@ -40,12 +40,14 @@ type Tracker struct {
 	mu          sync.Mutex
 	vrids       map[uint8]*VRIDState
 	transitions map[Transition]uint64
+	stepdowns   map[uint8]uint64 // priority-0 adverts seen, per VRID
 }
 
 func NewTracker() *Tracker {
 	return &Tracker{
 		vrids:       make(map[uint8]*VRIDState),
 		transitions: make(map[Transition]uint64),
+		stepdowns:   make(map[uint8]uint64),
 	}
 }
 
@@ -67,10 +69,27 @@ func (t *Tracker) Observe(a *Advert, now time.Time) {
 	s.Version = a.Version
 	s.VIPs = a.VIPs
 	s.LastSeen = now
+	// Count the edge, not the level: the stepdown gauge is true only between
+	// the priority-0 advert and the takeover — often shorter than a scrape
+	// interval — so the counter is the durable record.
+	if a.Priority == 0 && !s.Stepdown {
+		t.stepdowns[a.VRID]++
+	}
 	s.Stepdown = a.Priority == 0
 	if a.Interval > 0 {
 		s.Interval = a.Interval
 	}
+}
+
+// Stepdowns returns per-VRID counts of graceful (priority-0) stepdowns.
+func (t *Tracker) Stepdowns() map[uint8]uint64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make(map[uint8]uint64, len(t.stepdowns))
+	for k, v := range t.stepdowns {
+		out[k] = v
+	}
+	return out
 }
 
 // Snapshot returns copies of the current per-VRID state and transition counts.

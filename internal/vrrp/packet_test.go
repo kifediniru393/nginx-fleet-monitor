@@ -184,3 +184,20 @@ func TestTrackerVRIDsIndependent(t *testing.T) {
 		t.Fatal("cross-VRID takeover recorded")
 	}
 }
+
+func TestTrackerStepdownCounter(t *testing.T) {
+	tr := NewTracker()
+	now := time.Now()
+	normal, _ := Parse(buildV2(51, 150, 1, vip), srcA, dst)
+	prio0, _ := Parse(buildV2(51, 0, 1, vip), srcA, dst)
+
+	tr.Observe(normal, now)
+	tr.Observe(prio0, now.Add(time.Second))
+	tr.Observe(prio0, now.Add(2*time.Second)) // same stepdown burst: one edge
+	tr.Observe(normal, now.Add(3*time.Second))
+	tr.Observe(prio0, now.Add(4*time.Second)) // second stepdown event
+
+	if n := tr.Stepdowns()[51]; n != 2 {
+		t.Fatalf("stepdowns = %d, want 2 (edge-counted)", n)
+	}
+}

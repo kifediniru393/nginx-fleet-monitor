@@ -36,6 +36,44 @@ groups:
             vhost {{ $labels.vhost }} has served no traffic for over 5 days —
             decommission candidate.
 
+      # Intent-vs-actual drift, joined via upstream_member_info (config
+      # hostname -> resolved IP, the identity ingress observes in logs).
+
+      # Configured member with zero observed traffic while its vhost IS
+      # serving: down, backup, weight-starved, or dead config.
+      - alert: NginxUpstreamMemberReceivingNoTraffic
+        expr: |
+          (
+            nginx_fleet_upstream_member_info
+            unless on (vhost, upstream_addr)
+              label_replace(nginx_fleet_upstream_requests_total,
+                            "upstream_addr", "$1", "upstream_addr", "(.*)")
+          )
+          and on (vhost) (rate(nginx_fleet_ingress_requests_total[30m]) > 0)
+        for: 6h
+        labels:
+          severity: info
+        annotations:
+          summary: >-
+            Configured member {{ $labels.upstream_addr }} of vhost
+            {{ $labels.vhost }} receives no traffic while the vhost serves.
+
+      # Traffic observed to an address no configured member resolves to:
+      # stale DNS, manual proxy_pass edit, or config removed while running.
+      - alert: NginxTrafficToUnconfiguredUpstream
+        expr: |
+          sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[30m])) > 0
+          unless on (vhost, upstream_addr)
+            label_replace(nginx_fleet_upstream_member_info,
+                          "upstream_addr", "$1", "upstream_ip", "(.*)")
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            vhost {{ $labels.vhost }} sends traffic to
+            {{ $labels.upstream_addr }}, which no configured upstream resolves to.
+
       - alert: NginxVRRPSplitBrain
         expr: |
           count by (vrid) (
