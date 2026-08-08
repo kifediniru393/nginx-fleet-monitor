@@ -1,0 +1,13 @@
+# Install: copy to /etc/logrotate.d/nginx-fleet
+# The exporter's tailer detects the inode change and follows the new file.
+/var/log/nginx/fleet.log {
+    daily
+    rotate 3
+    missingok
+    notifempty
+    compress
+    delaycompress
+    postrotate
+        [ -f /var/run/nginx.pid ] && kill -USR1 $(cat /var/run/nginx.pid)
+    endscript
+}
