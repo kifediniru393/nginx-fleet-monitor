@@ -8,10 +8,25 @@ A standard Prometheus exporter for nginx fleets. Single Go binary, one
 | config | always on | `nginx_fleet_vhost_info`, `nginx_fleet_worker_processes`, `nginx_fleet_worker_connections_limit` — intended topology from `nginx -T` |
 | workers | always on (Linux) | per-worker fds/CPU/RSS from `/proc` |
 | vrrp | optional | passive VRRP cluster identity: master state, transitions, stepdown early-warning, `nginx_fleet_active` |
+| ingress | optional | log-tailing runtime attribution: per-vhost requests/bytes, per-upstream traffic and failures, `nginx_fleet_upstream_up`, last-traffic timestamps (decommission signal) |
 
-Design: see `nginx-fleet-exporter-plan.md` (revision 3). This tree implements
-**Phase 0**; the ingress attribution collector (per-vhost/per-backend traffic,
-config-hygiene timestamps) is Phase 1/2.
+Design: see `nginx-fleet-exporter-plan.md` (revision 3).
+
+## Ingress collector setup
+
+The one permitted piece of nginx config coupling — add to `http {}`:
+
+```nginx
+log_format fleet escape=json '{"host":"$host","upstream":"$upstream_addr",'
+    '"bytes_sent":$bytes_sent,"request_length":$request_length,'
+    '"status":$status,"upstream_time":"$upstream_response_time"}';
+access_log /var/log/nginx/fleet.log fleet;
+```
+
+Then run with `--ingress.access-log=/var/log/nginx/fleet.log`. The tailer
+starts at end-of-file, survives logrotate (inode change) and truncation, and
+retries if the file disappears. Retried requests (`proxy_next_upstream`) count
+every non-final attempt as an empirical failure for that member.
 
 ## Usage
 
