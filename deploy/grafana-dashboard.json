@@ -414,7 +414,7 @@
    },
    {
     "id": 8,
-    "title": "Live traffic topology \u2014 VIP \u2192 vhost \u2192 upstream (req/s)",
+    "title": "$vhost \u2014 live topology: VIP \u2192 vhost \u2192 upstream (req/s)",
     "type": "nodeGraph",
     "datasource": {
      "type": "prometheus",
@@ -432,7 +432,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "label_replace(label_replace(sum by (vhost) (rate(nginx_fleet_ingress_requests_total[5m])), \"source\", \"VIP 192.168.2.154\", \"\", \"\"), \"target\", \"$1\", \"vhost\", \"(.*)\")",
+      "expr": "label_replace(label_replace(sum by (vhost) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])), \"source\", \"VIP 192.168.2.154\", \"\", \"\"), \"target\", \"$1\", \"vhost\", \"(.*)\")",
       "legendFormat": "",
       "instant": true,
       "format": "table",
@@ -443,7 +443,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "label_replace(label_replace(sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m])), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")",
+      "expr": "label_replace(label_replace(sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")",
       "legendFormat": "",
       "instant": true,
       "format": "table",
@@ -489,7 +489,7 @@
    },
    {
     "id": 9,
-    "title": "Flow detail",
+    "title": "$vhost \u2014 flow detail",
     "type": "table",
     "datasource": {
      "type": "prometheus",
@@ -507,7 +507,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
+      "expr": "sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "",
       "instant": true,
       "format": "table",
@@ -820,5 +820,5 @@
   ]
  },
  "overwrite": true,
- "message": "ops redesign: NOC wall, topology, per-vhost drill-down"
+ "message": "topology scoped to selected vhost"
 }
