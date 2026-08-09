@@ -17,6 +17,24 @@
   "templating": {
    "list": [
     {
+     "name": "instance",
+     "label": "nginx instance",
+     "type": "query",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "bfum9nnilgflsf"
+     },
+     "refresh": 2,
+     "query": {
+      "query": "label_values(nginx_fleet_vhost_info, instance)",
+      "refId": "vi"
+     },
+     "includeAll": false,
+     "multi": false,
+     "current": {},
+     "sort": 1
+    },
+    {
      "name": "vhost",
      "type": "query",
      "datasource": {
@@ -25,7 +43,7 @@
      },
      "refresh": 2,
      "query": {
-      "query": "label_values(nginx_fleet_vhost_info, vhost)",
+      "query": "label_values(nginx_fleet_vhost_info{instance=\"$instance\"}, vhost)",
       "refId": "var"
      },
      "includeAll": false,
@@ -36,19 +54,7 @@
    ]
   },
   "annotations": {
-   "list": [
-    {
-     "name": "failovers",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "bfum9nnilgflsf"
-     },
-     "enable": true,
-     "iconColor": "red",
-     "expr": "sum(increase(nginx_fleet_vrrp_transitions_total[1m])) > 0",
-     "titleFormat": "VRRP failover"
-    }
-   ]
+   "list": []
   },
   "panels": [
    {
@@ -62,7 +68,7 @@
     "gridPos": {
      "x": 0,
      "y": 0,
-     "w": 8,
+     "w": 6,
      "h": 5
     },
     "targets": [
@@ -836,9 +842,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 8,
+     "x": 6,
      "y": 0,
-     "w": 8,
+     "w": 6,
      "h": 5
     },
     "targets": [
@@ -1209,6 +1215,64 @@
     },
     "options": {
      "cellHeight": "sm"
+    }
+   },
+   {
+    "id": 19,
+    "title": "$vhost \u2014 VIP MOVES",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 12,
+     "y": 0,
+     "w": 4,
+     "h": 5
+    },
+    "description": "How many times this vhost's serving role moved between the two nginx instances of its cluster, within the dashboard time range (failovers + failbacks, counted once each, observer-deduplicated). Exporter restarts can slightly inflate this via counter resets.",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "refId": "A",
+      "instant": true,
+      "expr": "sum(max by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total{from_node!=\"\"}[$__range])) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=\"$vhost\"}))) or vector(0)",
+      "legendFormat": "in time range"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "orange",
+         "value": 3
+        },
+        {
+         "color": "red",
+         "value": 6
+        }
+       ]
+      },
+      "decimals": 0
+     },
+     "overrides": []
+    },
+    "options": {
+     "colorMode": "background",
+     "textMode": "value_and_name",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
     }
    }
   ]
