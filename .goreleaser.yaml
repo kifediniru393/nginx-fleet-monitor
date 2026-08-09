@@ -1,0 +1,26 @@
+version: 2
+project_name: nginx-fleet-exporter
+
+builds:
+  - main: ./cmd/nginx-fleet-exporter
+    binary: nginx-fleet-exporter
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w"]
+
+archives:
+  - formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - deploy/*
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  draft: false
+
+changelog:
+  use: github

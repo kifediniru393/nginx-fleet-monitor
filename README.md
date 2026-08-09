@@ -1,5 +1,7 @@
 # nginx-fleet-exporter
 
+[![CI](https://github.com/kifediniru393/nginx-fleet-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/kifediniru393/nginx-fleet-monitor/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![Go Report](https://goreportcard.com/badge/github.com/techmoose/nginx-fleet-exporter)](https://goreportcard.com/report/github.com/techmoose/nginx-fleet-exporter)
+
 **A single-binary Prometheus exporter for nginx fleets running keepalived HA pairs — cluster identity from the wire, traffic attribution per vhost and upstream, and empirical config hygiene.**
 
 Standard exposition format on one `/metrics` endpoint. No runtime dependency on any other exporter or agent. Written in Go with only the Prometheus client and `x/sys` as dependencies.
