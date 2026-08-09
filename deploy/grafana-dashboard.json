@@ -16,7 +16,7 @@
   "panels": [
    {
     "id": 1,
-    "title": "Current master (per VRID)",
+    "title": "VIP holder",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -25,7 +25,7 @@
     "gridPos": {
      "x": 0,
      "y": 0,
-     "w": 6,
+     "w": 8,
      "h": 4
     },
     "targets": [
@@ -34,8 +34,8 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "max by (vrid, node) (nginx_fleet_vrrp_master) == 1",
-      "legendFormat": "VRID {{vrid}}: {{node}}",
+      "expr": "max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1",
+      "legendFormat": "{{vip}} \u2192 {{node}} (vrid {{vrid}})",
       "refId": "A",
       "instant": true
      }
@@ -61,9 +61,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 6,
+     "x": 8,
      "y": 0,
-     "w": 5,
+     "w": 4,
      "h": 4
     },
     "targets": [
@@ -99,9 +99,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 11,
+     "x": 12,
      "y": 0,
-     "w": 4,
+     "w": 3,
      "h": 4
     },
     "targets": [
@@ -614,6 +614,112 @@
      "defaults": {},
      "overrides": []
     }
+   },
+   {
+    "id": 16,
+    "title": "VIPs (configured vs held)",
+    "type": "table",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 41,
+     "w": 24,
+     "h": 6
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "refId": "A",
+      "instant": true,
+      "format": "table",
+      "expr": "max by (segment, vrid, vip) (nginx_fleet_cluster_info)"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "refId": "B",
+      "instant": true,
+      "format": "table",
+      "expr": "max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1"
+     }
+    ],
+    "transformations": [
+     {
+      "id": "joinByField",
+      "options": {
+       "byField": "vip",
+       "mode": "outer"
+      }
+     },
+     {
+      "id": "organize",
+      "options": {
+       "excludeByName": {
+        "Time": true,
+        "Time 1": true,
+        "Time 2": true,
+        "Value #A": true
+       },
+       "renameByName": {
+        "vrid 1": "vrid",
+        "node": "current master",
+        "Value #B": "held"
+       }
+      }
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": [
+      {
+       "matcher": {
+        "id": "byName",
+        "options": "held"
+       },
+       "properties": [
+        {
+         "id": "mappings",
+         "value": [
+          {
+           "type": "value",
+           "options": {
+            "1": {
+             "text": "yes",
+             "color": "green"
+            }
+           }
+          },
+          {
+           "type": "special",
+           "options": {
+            "match": "null",
+            "result": {
+             "text": "NO MASTER",
+             "color": "red"
+            }
+           }
+          }
+         ]
+        },
+        {
+         "id": "custom.cellOptions",
+         "value": {
+          "type": "color-background"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    "options": {}
    }
   ]
  },
