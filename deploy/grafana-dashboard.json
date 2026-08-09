@@ -1,0 +1,622 @@
+{
+ "dashboard": {
+  "uid": "nginx-fleet",
+  "title": "nginx Fleet",
+  "tags": [
+   "nginx",
+   "keepalived"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+   "from": "now-6h",
+   "to": "now"
+  },
+  "panels": [
+   {
+    "id": 1,
+    "title": "Current master (per VRID)",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 0,
+     "w": 6,
+     "h": 4
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "max by (vrid, node) (nginx_fleet_vrrp_master) == 1",
+      "legendFormat": "VRID {{vrid}}: {{node}}",
+      "refId": "A",
+      "instant": true
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    },
+    "options": {
+     "textMode": "name",
+     "colorMode": "background",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    }
+   },
+   {
+    "id": 2,
+    "title": "Active node",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 6,
+     "y": 0,
+     "w": 5,
+     "h": 4
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "nginx_fleet_active == 1",
+      "legendFormat": "{{node}} ({{method}})",
+      "refId": "A",
+      "instant": true
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    },
+    "options": {
+     "textMode": "name",
+     "colorMode": "background",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    }
+   },
+   {
+    "id": 3,
+    "title": "Cluster members",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 11,
+     "y": 0,
+     "w": 4,
+     "h": 4
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "count by (vrid) (count by (vrid, member_node) (nginx_fleet_cluster_info))",
+      "legendFormat": "VRID {{vrid}}",
+      "refId": "A",
+      "instant": true
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    },
+    "options": {
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    }
+   },
+   {
+    "id": 4,
+    "title": "Exporters up",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 15,
+     "y": 0,
+     "w": 3,
+     "h": 4
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum(up{job=\"nginx-fleet\"})",
+      "legendFormat": "up",
+      "refId": "A",
+      "instant": true
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    },
+    "options": {
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    }
+   },
+   {
+    "id": 5,
+    "title": "Master but no nginx workers",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 18,
+     "y": 0,
+     "w": 6,
+     "h": 4
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open) or vector(0)",
+      "legendFormat": "blackholed",
+      "refId": "A",
+      "instant": true
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": [
+      {
+       "matcher": {
+        "id": "byName",
+        "options": "blackholed"
+       },
+       "properties": [
+        {
+         "id": "thresholds",
+         "value": {
+          "mode": "absolute",
+          "steps": [
+           {
+            "color": "green",
+            "value": null
+           },
+           {
+            "color": "red",
+            "value": 1
+           }
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    },
+    "options": {
+     "colorMode": "background",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    }
+   },
+   {
+    "id": 6,
+    "title": "Failovers & stepdowns",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 4,
+     "w": 12,
+     "h": 7
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total[5m])) > 0",
+      "legendFormat": "{{from_node}} \u2192 {{to_node}}",
+      "refId": "A"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (vrid) (increase(nginx_fleet_vrrp_stepdowns_total[5m])) > 0",
+      "legendFormat": "stepdown vrid {{vrid}}",
+      "refId": "B"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    }
+   },
+   {
+    "id": 7,
+    "title": "Advert age by observer (staleness / partition signal)",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 12,
+     "y": 4,
+     "w": 12,
+     "h": 7
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "max by (vrid, observer) (nginx_fleet_vrrp_last_advert_age_seconds)",
+      "legendFormat": "vrid {{vrid}} seen by {{observer}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "s"
+     },
+     "overrides": []
+    }
+   },
+   {
+    "id": 8,
+    "title": "Requests by vhost",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 11,
+     "w": 12,
+     "h": 8
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (vhost, status_class) (rate(nginx_fleet_ingress_requests_total[5m]))",
+      "legendFormat": "{{vhost}} {{status_class}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "reqps"
+     },
+     "overrides": []
+    }
+   },
+   {
+    "id": 9,
+    "title": "Requests by upstream member",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 12,
+     "y": 11,
+     "w": 12,
+     "h": 8
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
+      "legendFormat": "{{vhost}} \u2192 {{upstream_addr}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "reqps"
+     },
+     "overrides": []
+    }
+   },
+   {
+    "id": 10,
+    "title": "Bytes by vhost",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 19,
+     "w": 12,
+     "h": 7
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (vhost, direction) (rate(nginx_fleet_ingress_bytes_total[5m]))",
+      "legendFormat": "{{vhost}} {{direction}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "Bps"
+     },
+     "overrides": []
+    }
+   },
+   {
+    "id": 11,
+    "title": "Upstream mean response time",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 12,
+     "y": 19,
+     "w": 12,
+     "h": 7
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum[5m])) / sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
+      "legendFormat": "{{vhost}} \u2192 {{upstream_addr}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "s"
+     },
+     "overrides": []
+    }
+   },
+   {
+    "id": 12,
+    "title": "Upstream up/down (empirical)",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 26,
+     "w": 12,
+     "h": 7
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "max by (vhost, upstream_addr) (nginx_fleet_upstream_up)",
+      "legendFormat": "{{vhost}} \u2192 {{upstream_addr}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    },
+    "options": {
+     "legend": {
+      "displayMode": "list"
+     }
+    }
+   },
+   {
+    "id": 13,
+    "title": "Upstream failures by reason",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 12,
+     "y": 26,
+     "w": 12,
+     "h": 7
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (vhost, upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total[5m]))",
+      "legendFormat": "{{upstream_addr}} {{reason}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "reqps"
+     },
+     "overrides": []
+    }
+   },
+   {
+    "id": 14,
+    "title": "Idle time \u2014 decommission candidates at 5d",
+    "type": "table",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 33,
+     "w": 12,
+     "h": 8
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sort_desc((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds)) / 86400)",
+      "legendFormat": "",
+      "refId": "A",
+      "instant": true,
+      "format": "table"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "none"
+     },
+     "overrides": [
+      {
+       "matcher": {
+        "id": "byName",
+        "options": "Value"
+       },
+       "properties": [
+        {
+         "id": "displayName",
+         "value": "idle days"
+        },
+        {
+         "id": "decimals",
+         "value": 2
+        },
+        {
+         "id": "thresholds",
+         "value": {
+          "mode": "absolute",
+          "steps": [
+           {
+            "color": "green",
+            "value": null
+           },
+           {
+            "color": "orange",
+            "value": 3
+           },
+           {
+            "color": "red",
+            "value": 5
+           }
+          ]
+         }
+        },
+        {
+         "id": "custom.cellOptions",
+         "value": {
+          "type": "color-background"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "id": 15,
+    "title": "Worker capacity",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 12,
+     "y": 33,
+     "w": 12,
+     "h": 8
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (instance) (nginx_fleet_worker_fds_open)",
+      "legendFormat": "{{instance}} fds open",
+      "refId": "A"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (instance) (rate(nginx_fleet_worker_cpu_seconds_total[5m]))",
+      "legendFormat": "{{instance}} cpu",
+      "refId": "B"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (instance) (nginx_fleet_worker_rss_bytes) / 1048576",
+      "legendFormat": "{{instance}} rss MiB",
+      "refId": "C"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    }
+   }
+  ]
+ },
+ "overwrite": true,
+ "message": "nginx-fleet-exporter dashboard"
+}
