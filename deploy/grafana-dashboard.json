@@ -52,7 +52,7 @@
   "panels": [
    {
     "id": 1,
-    "title": "VIP HOLDER",
+    "title": "VIP HOLDERS (one per cluster)",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -71,7 +71,7 @@
        "uid": "bfum9nnilgflsf"
       },
       "expr": "max by (vip, vrid, observer) (nginx_fleet_vrrp_master == 1) and on (observer) label_replace(nginx_fleet_active == 1, \"observer\", \"$1\", \"node\", \"(.*)\")",
-      "legendFormat": "{{observer}} ({{vip}})",
+      "legendFormat": "vrid {{vrid}}: {{observer}} ({{vip}})",
       "instant": true,
       "refId": "A"
      }
@@ -96,7 +96,8 @@
      "reduceOptions": {
       "calc": "lastNotNull"
      }
-    }
+    },
+    "description": "Current holder of each VIP, one entry per cluster (vrid). Two entries here is normal with two clusters; two holders for the SAME vrid is split brain and fires the panel to the right."
    },
    {
     "id": 2,
