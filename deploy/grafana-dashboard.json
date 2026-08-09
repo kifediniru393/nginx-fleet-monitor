@@ -25,12 +25,13 @@
      },
      "refresh": 2,
      "query": {
-      "query": "label_values(nginx_fleet_ingress_requests_total, vhost)",
+      "query": "label_values(nginx_fleet_vhost_info, vhost)",
       "refId": "var"
      },
      "includeAll": false,
      "multi": false,
-     "current": {}
+     "current": {},
+     "regex": "/^(?!_$)(?![0-9.]+$).*/"
     }
    ]
   },
