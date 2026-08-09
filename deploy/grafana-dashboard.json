@@ -52,7 +52,7 @@
   "panels": [
    {
     "id": 1,
-    "title": "VIP HOLDERS (one per cluster)",
+    "title": "$vhost \u2014 VIP HOLDER",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -70,8 +70,8 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "max by (vip, vrid, observer) (nginx_fleet_vrrp_master == 1) and on (observer) label_replace(nginx_fleet_active == 1, \"observer\", \"$1\", \"node\", \"(.*)\")",
-      "legendFormat": "vrid {{vrid}}: {{observer}} ({{vip}})",
+      "expr": "(label_replace(max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1, \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid, vip) max by (vrid, vip) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+      "legendFormat": "{{member_node}} ({{vip}})",
       "instant": true,
       "refId": "A"
      }
@@ -97,7 +97,7 @@
       "calc": "lastNotNull"
      }
     },
-    "description": "Current holder of each VIP, one entry per cluster (vrid). Two entries here is normal with two clusters; two holders for the SAME vrid is split brain and fires the panel to the right."
+    "description": "The node currently holding the VIP that serves the selected vhost. Exactly one entry when healthy; two entries for the same vrid = split brain."
    },
    {
     "id": 2,
@@ -824,7 +824,7 @@
    },
    {
     "id": 14,
-    "title": "KEEPALIVED MASTER",
+    "title": "$vhost \u2014 KEEPALIVED MASTER",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -844,8 +844,8 @@
       },
       "refId": "A",
       "instant": true,
-      "expr": "max by (vrid, observer) (nginx_fleet_vrrp_priority) and on (observer) label_replace(nginx_fleet_active == 1, \"observer\", \"$1\", \"node\", \"(.*)\")",
-      "legendFormat": "{{observer}} \u2014 vrid {{vrid}}, priority"
+      "expr": "(label_replace(max by (vrid, node) (nginx_fleet_vrrp_priority), \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+      "legendFormat": "{{member_node}} \u2014 vrid {{vrid}}, priority"
      }
     ],
     "fieldConfig": {
@@ -869,7 +869,7 @@
       "calc": "lastNotNull"
      }
     },
-    "description": "Current VRRP master by hostname, with its live advertised priority. Priority drops (150\u219290) mean the nginx health check has demoted the node."
+    "description": "Master of the selected vhost's cluster, with its live advertised priority. A drop (e.g. 150\u219290) means the nginx health check demoted it."
    },
    {
     "id": 15,
