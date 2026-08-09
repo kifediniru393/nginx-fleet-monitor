@@ -1,139 +1,306 @@
 # nginx-fleet-exporter
 
-A standard Prometheus exporter for nginx fleets. Single Go binary, one
-`/metrics` endpoint (default `:9942`), modular collectors that degrade
-independently — any collector failing leaves the rest serving:
+**A single-binary Prometheus exporter for nginx fleets running keepalived HA pairs — cluster identity from the wire, traffic attribution per vhost and upstream, and empirical config hygiene.**
 
-| Collector | Status | What it gives you |
-|---|---|---|
-| config | always on | Intended topology from the nginx config: `vhost_info` (vhost × listener × upstream member), `worker_processes`, `worker_connections_limit` |
-| workers | always on (Linux) | Per-worker capacity from `/proc`: open/limit fds, CPU, RSS |
-| ingress | optional (`--ingress.access-log`) | Observed traffic from a dedicated access log: per-vhost requests/bytes, per-upstream traffic/failures/latency, `upstream_up`, last-traffic idle clocks |
-| vrrp | optional (`--vrrp`) | Passive VRRP cluster identity from the wire: who is master per VRID, failover transitions, stepdown early-warning, `nginx_fleet_active` |
-| keepalived membership | automatic | `cluster_info` from the local keepalived.conf: which VRIDs this node belongs to, on which L2 segment |
+Standard exposition format on one `/metrics` endpoint. No runtime dependency on any other exporter or agent. Written in Go with only the Prometheus client and `x/sys` as dependencies.
 
-Design rationale: `nginx-fleet-exporter-plan.md` (revision 3).
-Verified on a live keepalived pair: failover detected < 2 s, transitions
-counted exactly once per direction on every observer.
+---
 
-## Requirements
+## The problem
 
-- **Linux** on the target hosts (VRRP listener and /proc metrics are
-  Linux-only; the binary runs elsewhere with those collectors disabled).
-- **CAP_NET_RAW** for the VRRP listener (packet socket, same mechanism as
-  tcpdump). Granted by the shipped systemd unit; without it the exporter
-  still runs with `vrrp_enabled 0`.
-- **Readable nginx config.** The collector tries `nginx -T` first (the
-  *running* config); if that fails — it validates TLS keys an unprivileged
-  user can't read — it falls back to parsing `/etc/nginx/nginx.conf` from
-  disk with full `include` resolution. No sudo, no cert access needed.
-- **Readable access log** for the ingress collector (the unit adds the
-  exporter user to group `adm`; the drop-in's log is root-owned 0644).
-- Go 1.26+ to build. No runtime dependencies on any other exporter/agent.
+If you run nginx on VMs (not Kubernetes), fronted by keepalived VIPs, with multiple
+`server_name`s proxying to shared backends, these questions are surprisingly hard to
+answer with today's tooling:
 
-## Install (per host, all steps additive — no existing file is edited)
+1. **Who is the active node right now?** Prometheus sees `nginx-1` and `nginx-2` as two
+   unrelated hosts. It has no concept of "this pair is one serving entity," so you can't
+   reason about failovers, headroom, or moving a vhost to another cluster.
+2. **Which vhost generates which share of the load?** Multiple sites share one backend
+   IP; at the network level everything collapses onto that tuple.
+3. **Which upstream members actually receive traffic — and which are silently down?**
+   Config says three members; is nginx really sending to all three?
+4. **Which configs are dead?** Every long-lived fleet accumulates vhosts and upstreams
+   that serve no traffic. Nobody dares delete them because nobody can prove they're unused.
+
+Today the answer to all four is "SSH into the box." This exporter exists to make them
+Prometheus queries instead.
+
+## How it compares to existing tools
+
+| | vhost traffic | per-upstream traffic + health | VRRP cluster identity | failover capture | dead-config detection | runtime deps | nginx config changes |
+|---|---|---|---|---|---|---|---|
+| `nginx-prometheus-exporter` (official) | ✗ (totals only, from `stub_status`) | ✗ | ✗ | ✗ | ✗ | — | `stub_status` location |
+| `nginx-module-vts` | ✓ | ✓ | ✗ | ✗ | ✗ | module compile | module + directives |
+| `prometheus-nginxlog-exporter` | ✓ | partial | ✗ | ✗ | ✗ | — | `log_format` |
+| keepalived exporters (`gen2brain`, `mehdy`, `cafebazaar`) | ✗ | ✗ | **self-report only** | partial | ✗ | some need `--enable-json` builds | — |
+| nginx Plus | ✓ | ✓ | ✗ | ✗ | ✗ | commercial licence | `status_zone` |
+| **nginx-fleet-exporter** | ✓ | ✓ | **✓ from the wire** | ✓ | ✓ | none | one additive drop-in file |
+
+Two gaps in the existing landscape drove this project:
+
+**Every keepalived exporter trusts keepalived's self-report** — SIGUSR1/2 state dumps or
+the JSON interface. If keepalived is wrong, wedged, or split-brained, its self-report is
+exactly what you cannot trust. This exporter instead **listens to VRRP advertisements on
+the wire** (IP protocol 112, the same packets the routers exchange) and derives master
+state from ground truth. The node best positioned to report a master's death is never the
+dead master — with every node observing the wire, the standby records the takeover even
+while the old master's exporter dies with it.
+
+**Nobody joins traffic attribution to cluster identity.** Per-vhost metrics exist (VTS,
+log exporters); what doesn't exist is the composition: *this vhost pushed this many bytes
+to this upstream member, through the node that held this VIP at this moment* — with no
+double-counting through a failover. That composition is the point of this exporter.
+
+### Design principle
+
+> **Observe the network, don't interrogate the box.**
+
+Config parsing tells us intent. The wire and the access log tell us truth. Self-report —
+keepalived's or nginx's — is an input to be cross-checked, never a source of authority.
+The same principle applied to configuration gives the hygiene layer: a vhost exists when
+traffic proves it, not when a config file claims it.
+
+---
+
+## Architecture
+
+One Go binary, one systemd unit, modular collectors that **degrade independently** — any
+collector failing (no keepalived, unreadable log, DNS outage, permission denied) reports
+itself as a metric and leaves the rest serving:
+
+| Collector | Enabled | Source | Provides |
+|---|---|---|---|
+| `config` | always | `nginx -T`, falling back to parsing `/etc/nginx/nginx.conf` from disk with `include` resolution | intended topology: vhost × listener × upstream member, worker limits |
+| `workers` | always (Linux) | `/proc` | per-worker fds, CPU, RSS |
+| `ingress` | `--ingress.access-log` | dedicated JSON access log (additive drop-in) | per-vhost and per-upstream traffic, failures, latency, idle clocks |
+| `vrrp` | `--vrrp` (auto-detect) | AF_PACKET capture of protocol-112 adverts | master per VRID, failover transitions, stepdown early-warning |
+| keepalived membership | automatic | local `keepalived.conf` | cluster membership incl. silent standbys, L2 segment identity |
+
+Notable implementation details:
+
+- **VRRP parser** branches on the version nibble before trusting any offset: v2 carries
+  its interval in whole seconds and checksums the entire message including auth data
+  (RFC 3768); v3 uses 12-bit centiseconds and a pseudo-header checksum. Validated against
+  a checked-in capture of real keepalived adverts — the fixture that caught a checksum-scope
+  bug synthetic tests missed.
+- **AF_PACKET rather than a multicast group join**, so `unicast_peer` deployments are
+  visible too.
+- **DNS resolution decoupled from scrapes**: upstream hostnames resolve in a background
+  loop; an outage keeps last-known mappings (matching nginx's own reload-cached behavior)
+  and recovery self-heals within a minute.
+- **Idle clocks persist across restarts** (atomic JSON state file) and configured-but-
+  never-used vhosts/upstreams are seeded with a "watching since" timestamp — so dead
+  config alerts even if it never served a single request, and a weekly restart can't
+  reset a decommission clock.
+- **Hardened by default**: single capability (`CAP_NET_RAW`), strict systemd sandbox,
+  HTTP timeouts, bounded label cardinality (`_other` bucket for vhosts, capped VRRP
+  transition pairs against advert-spoofing floods, negative-value guards on log input).
+
+### Every VRRP observation is labeled with its observer
+
+```
+nginx_fleet_vrrp_master{vrid="51", node="192.168.2.153", vip="192.168.2.154", observer="lb-svr2"} 1
+```
+
+reads: *"lb-svr2 heard, on the wire, that .153 is master."* All nodes observe all adverts,
+so you get N independent accounts of the same fact. Observers disagreeing is not noise —
+it's a network partition, visible from both sides.
+
+---
+
+## Quick start
 
 ```sh
-# 1. Build (on your workstation)
 GOOS=linux GOARCH=amd64 go build -o nginx-fleet-exporter ./cmd/nginx-fleet-exporter
 
-# 2. Binary + systemd unit
-scp nginx-fleet-exporter root@HOST:/usr/local/bin/
+# per host — every step is additive; no existing config file is edited
+scp nginx-fleet-exporter          root@HOST:/usr/local/bin/
 scp deploy/nginx-fleet-exporter.service root@HOST:/etc/systemd/system/
-ssh root@HOST 'useradd -r -s /usr/sbin/nologin nginx-exporter; usermod -aG adm nginx-exporter'
+scp deploy/zz-fleet-logging.conf  root@HOST:/etc/nginx/conf.d/   # ingress log drop-in
+scp deploy/fleet-logrotate        root@HOST:/etc/logrotate.d/nginx-fleet
+ssh root@HOST '
+  useradd -r -s /usr/sbin/nologin nginx-exporter; usermod -aG adm nginx-exporter
+  nginx -t && nginx -s reload
+  systemctl daemon-reload && systemctl enable --now nginx-fleet-exporter'
 
-# 3. Ingress log drop-in (skip if you don't want traffic attribution)
-scp deploy/zz-fleet-logging.conf root@HOST:/etc/nginx/conf.d/
-ssh root@HOST 'nginx -t && nginx -s reload'
-
-# 4. Log rotation for the new log
-scp deploy/fleet-logrotate root@HOST:/etc/logrotate.d/nginx-fleet
-
-# 5. Start
-ssh root@HOST 'systemctl daemon-reload && systemctl enable --now nginx-fleet-exporter'
 curl -s http://HOST:9942/metrics | grep nginx_fleet_
 ```
 
-The logging drop-in works because stock nginx setups `include
-/etc/nginx/conf.d/*.conf` inside `http {}`; nginx writes to *every*
-configured `access_log`, so existing logs continue untouched and deleting
-the drop-in fully reverts. **Boundary:** a `server` block that declares its
-own `access_log` overrides the http-level one — such vhosts won't appear in
-the fleet log (their requests count only in their own logs).
+The logging drop-in works because stock nginx setups `include /etc/nginx/conf.d/*.conf`
+inside `http {}`, and nginx writes to *every* configured `access_log` — existing logs
+continue untouched; deleting the drop-in fully reverts. Boundary: a `server` block that
+declares its own `access_log` overrides the http-level one and won't appear in the fleet log.
 
 ## Flags
 
-| Flag | Default | Meaning |
+| Flag | Default | Description |
 |---|---|---|
-| `--web.listen-address` | `:9942` | metrics endpoint |
-| `--nginx.t-command` | `nginx -T` | command producing the assembled running config |
-| `--nginx.config` | `/etc/nginx/nginx.conf` | disk fallback when nginx -T fails; empty disables |
-| `--nginx.config-interval` | `60s` | minimum interval between config re-parses (never per-scrape) |
-| `--vrrp` | `auto` | `on` / `off` / `auto` (enabled once protocol-112 adverts are heard) |
-| `--keepalived.config` | `/etc/keepalived/keepalived.conf` | membership source; missing file is normal |
-| `--ingress.access-log` | *(empty = off)* | path to the fleet JSON log |
-| `--ingress.max-vhosts` | `500` | distinct vhost labels before folding into `_other` (wildcard `server_name` protection) |
-| `--ingress.state-file` | `/var/lib/nginx-fleet-exporter/state.json` | idle-clock persistence across restarts; empty disables |
-| `--decommission-window` | `120h` | idle window (5 days) exported for the hygiene rules |
+| `--web.listen-address` | `:9942` | Address for the `/metrics` endpoint. |
+| `--nginx.t-command` | `nginx -T` | Command that produces the assembled running config. `nginx -T` validates TLS key files, which an unprivileged exporter may not be able to read — hence the fallback below. |
+| `--nginx.config` | `/etc/nginx/nginx.conf` | On-disk config parsed (with recursive `include` glob resolution) when the command above fails. Empty string disables the fallback. Tradeoff: disk config can be newer than the running one if a reload hasn't happened. |
+| `--nginx.config-interval` | `60s` | Minimum interval between config re-parses. Parsing never happens on the scrape path. |
+| `--vrrp` | `auto` | VRRP module: `on`, `off`, or `auto` (module activates once protocol-112 adverts are heard). Off/absent/unprivileged all degrade to `nginx_fleet_vrrp_enabled 0` with everything else unaffected. |
+| `--keepalived.config` | `/etc/keepalived/keepalived.conf` | Local keepalived config parsed for cluster membership (`cluster_info`) and unicast detection. A missing file is a normal state, not an error. |
+| `--ingress.access-log` | *(empty = collector off)* | Path to the fleet JSON access log (see `deploy/zz-fleet-logging.conf`). The tailer starts at end-of-file (no double-count on restart), survives logrotate (inode change) and truncation, and retries if the file disappears. |
+| `--ingress.max-vhosts` | `500` | Distinct vhost label values before new ones fold into `_other`. Protects Prometheus from cardinality explosions via wildcard `server_name` + hostile SNI/Host values. |
+| `--ingress.state-file` | `/var/lib/nginx-fleet-exporter/state.json` | Persistence for the last-traffic idle clocks (periodic + shutdown save, atomic write). Empty disables. The systemd unit provides the directory via `StateDirectory=`. |
+| `--decommission-window` | `120h` | Idle window after which a vhost/upstream is a decommission candidate. Informational: exported as `nginx_fleet_decommission_window_seconds` and consumed by the alert rules, so the threshold lives in exactly one place. |
 
-## Cluster identity at fleet scale
+## Metrics reference
 
-Each node independently reports **membership** (from its own keepalived.conf
-— catches standbys, which never advertise) and **mastership** (from the wire
-— ground truth, not self-report). VRIDs are only unique per L2 segment, so
-`cluster_info` carries a `segment` label (the vrrp_instance interface's IPv4
-network in CIDR):
+<details>
+<summary><b>Cluster identity (vrrp module + keepalived membership)</b></summary>
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `nginx_fleet_vrrp_enabled` | — | 1 if the passive listener is running |
+| `nginx_fleet_vrrp_master` | vrid, node, vip, observer | 1 if `node` last advertised as master and is within its master-down interval |
+| `nginx_fleet_vrrp_priority` | vrid, node, observer | advertised priority of the current master (watch it drop when a health-check demotes a node) |
+| `nginx_fleet_vrrp_advert_interval_seconds` | vrid, observer | advertised interval |
+| `nginx_fleet_vrrp_advert_version` | vrid, observer | VRRP protocol version on the wire (2 or 3) |
+| `nginx_fleet_vrrp_last_advert_age_seconds` | vrid, node, observer | staleness; observers diverging here = partition signal |
+| `nginx_fleet_vrrp_transitions_total` | vrid, from_node, to_node, observer | failovers, counted exactly once per direction (empty `from_node` = initial election) |
+| `nginx_fleet_vrrp_stepdowns_total` | vrid, observer | graceful priority-0 stepdowns (edge-counted): the "VIP is about to move" early warning |
+| `nginx_fleet_vrrp_stepdown` | vrid, node, observer | instantaneous stepdown gauge (often too brief to scrape — use the counter) |
+| `nginx_fleet_vrrp_transitions_dropped_total` | observer | transition observations discarded by the cardinality cap (advert-spoofing flood guard) |
+| `nginx_fleet_cluster_info` | vrid, vip, member_node, instance, segment | membership from local keepalived.conf; passive VRRP cannot see silent backups, so membership comes from config, mastership from the wire. Group clusters by `(segment, vrid)` — VRIDs are only unique per L2 segment |
+| `nginx_fleet_vrrp_unicast_configured` | vrid, instance | 1 if the instance uses `unicast_peer` |
+| `nginx_fleet_active` | node, method | 1 if this node is currently serving (`method="vrrp"` from master state; `"static"` when no VRRP) |
+
+</details>
+
+<details>
+<summary><b>Topology (config collector)</b></summary>
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `nginx_fleet_vhost_info` | vhost, listen_addr, listen_port, tls, upstream_addr, config_file | intended routing graph from the running config |
+| `nginx_fleet_upstream_member_info` | vhost, upstream_addr, upstream_ip | configured member with its DNS-resolved address — the join between config-side hostnames and the resolved IPs observed in logs |
+| `nginx_fleet_worker_processes` / `nginx_fleet_worker_connections_limit` | — | configured capacity (`worker_processes auto` reports 0; count per-pid series instead) |
+| `nginx_fleet_config_parse_errors_total` | — | failures of both `nginx -T` and the disk fallback |
+
+</details>
+
+<details>
+<summary><b>Traffic & hygiene (ingress collector)</b></summary>
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `nginx_fleet_ingress_enabled` | — | 1 if the log tailer is running |
+| `nginx_fleet_ingress_requests_total` | vhost, status_class | requests per vhost by 2xx/3xx/4xx/5xx |
+| `nginx_fleet_ingress_bytes_total` | vhost, direction | L7 bytes (`$bytes_sent` / `$request_length`) |
+| `nginx_fleet_ingress_unattributed_total` | reason | lines that couldn't be attributed (`parse_fail`, `no_host`) — silent mis-attribution is worse than no attribution |
+| `nginx_fleet_upstream_requests_total` | vhost, upstream_addr | requests per upstream member, **including retried attempts** — a member hammered by `proxy_next_upstream` retries shows its true received load |
+| `nginx_fleet_upstream_failures_total` | vhost, upstream_addr, reason | empirical failures: `next_upstream` (skipped mid-request), `http_502/503/504`, per member |
+| `nginx_fleet_upstream_response_seconds_sum` | vhost, upstream_addr | sum of `$upstream_response_time` (divide by requests for the mean) |
+| `nginx_fleet_upstream_up` | vhost, upstream_addr | 1 if the most recent evidence for the member is a success; a later success flips a down member back up |
+| `nginx_fleet_vhost_last_traffic_timestamp_seconds` | vhost | idle clock per vhost |
+| `nginx_fleet_upstream_last_traffic_timestamp_seconds` | vhost, upstream_addr | idle clock per member; configured-but-never-used entries are seeded with "watching since", never-observed entries that leave the config are pruned |
+| `nginx_fleet_decommission_window_seconds` | — | the configured `--decommission-window`, for rules to reference |
+
+</details>
+
+<details>
+<summary><b>Workers (Linux)</b></summary>
+
+`nginx_fleet_worker_fds_open`, `nginx_fleet_worker_fds_limit`,
+`nginx_fleet_worker_cpu_seconds_total`, `nginx_fleet_worker_rss_bytes` — all per `pid`.
+
+</details>
+
+## Alerting & aggregation
+
+`rules/hygiene.yml` ships Prometheus/VictoriaMetrics rules for:
+
+- **Decommission candidates** — vhosts/upstreams idle past the window (default 5 days).
+  Make sure the window exceeds your longest legitimate quiet period (monthly batch jobs)
+  before acting on candidates.
+- **Down upstreams** — `upstream_up == 0` from observed evidence.
+- **Intent-vs-actual drift** — configured members receiving no traffic while their vhost
+  serves; traffic flowing to addresses no configured member resolves to.
+- **VRRP split brain** — two masters on one VRID.
+
+Cluster-level queries at fleet scale:
 
 ```promql
-count by (segment, vrid) (nginx_fleet_cluster_info)                 # every cluster + size
-max by (segment, vrid, node) (nginx_fleet_vrrp_master) == 1         # current master per cluster
-count by (segment, vrid) (nginx_fleet_cluster_info) < 2             # clusters missing a standby
-nginx_fleet_active{method="vrrp"}                                   # is this node serving?
+count by (segment, vrid) (nginx_fleet_cluster_info)                # every cluster + members
+max by (segment, vrid, node) (nginx_fleet_vrrp_master) == 1        # current master per cluster
+count by (segment, vrid) (nginx_fleet_cluster_info) < 2            # clusters missing a standby
+nginx_fleet_active{method="vrrp"}                                  # which of N nodes is serving
+count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open)  # VIP blackhole: master with no nginx
 ```
 
-Nodes without keepalived report `vrrp_enabled 0` and
-`active{method="static"} 1` — they coexist in the same dashboards.
+## Grafana dashboard
 
-## Hygiene / decommissioning
+`deploy/grafana-dashboard.json` — import via UI or API. Three tiers:
 
-`rules/hygiene.yml` (VictoriaMetrics/Prometheus rule file) flags:
+- **NOC wall**: VIP holder (hostname + address), current master with live priority,
+  split-brain / blackhole / idle-config alarms readable across a room.
+- **Live topology**: node graph of `VIP → vhost → upstream members`, edges weighted by
+  req/s, plus upstream load share / load-over-time / latency-under-load (the stress
+  signal: a member whose latency climbs as its share grows is saturating before it fails).
+- **Per-vhost drill-down** (`$vhost` template variable): requests by status, member table
+  with UP/DOWN and idle clocks, latency & failures, configured listeners.
 
-- **Decommission candidates**: vhosts/upstream members idle longer than the
-  5-day window. Configured-but-never-used entries are seeded with a
-  "watching since" clock, so dead config alerts too — it doesn't need to
-  have ever served a request. Idle clocks persist across exporter restarts.
-- **Down upstreams**: `upstream_up == 0` from empirical evidence — a
-  `proxy_next_upstream` retry marks the skipped member down, 502–504 finals
-  mark the serving member down, any success flips it back.
-- **VRRP split brain**: two masters on one VRID.
+Failover annotations (from `vrrp_transitions_total`) draw across all time-series panels,
+so "latency blipped at 14:32" and "the VIP moved at 14:32" line up visually.
 
-Make sure the decommission window exceeds your longest legitimate quiet
-period (monthly batch jobs) before acting on the candidates list.
+Adapt before importing elsewhere: the datasource `uid` and the VIP literal in the
+topology queries are environment-specific.
+
+## Verified behavior
+
+Tested end-to-end on a live two-node keepalived pair (VRRPv2, multicast, `authtype simple`):
+
+- Graceful failover detected in **< 2 s** (priority-0 early warning), hard-death bound by
+  the RFC 5798 master-down interval (~3.4 s at 1 s adverts).
+- Transitions counted **exactly once per direction per observer**, observers in full
+  agreement, through repeated failover/failback cycles.
+- **Zero dropped client requests** through failover with an nginx health-tracking
+  keepalived config (`vrrp_script` + priority weighting).
+- DNS outage → resolver serves stale mappings; recovery self-heals in ≤ 60 s without restart.
+- Exporter footprint at steady state: **~5 MB RSS, ~0.05 % of one core, 5 ms scrape** for
+  ~200 series.
 
 ## Testing
 
 ```sh
-go test ./...            # 30 tests, runs anywhere (includes golden-pcap replay)
+go test ./...        # runs anywhere, no privileges
 ```
 
-The VRRP parser is validated against a checked-in capture of real keepalived
-adverts (`internal/vrrp/testdata/`) — this fixture is what caught the RFC
-3768 checksum-scope bug synthetic tests missed. To validate a live pair,
-stop keepalived on the master and watch the standby's exporter: expect the
-takeover within ~2 s (graceful stop announces priority-0 first) and exactly
-one `vrrp_transitions_total` increment per direction per observer.
+The suite includes golden-pcap replay of real keepalived adverts, v2/v3 checksum and
+truncation cases, a v3-parsed-as-v2 rejection proof, failover/stepdown/flood simulations
+against the tracker, nginx -T and disk-fallback parsing, log-attribution cases including
+`proxy_next_upstream` retry lists, state-persistence round-trips, and cardinality-cap
+enforcement.
 
-## Known limitations
+## Security model
 
-- `worker_processes auto` reports as `0`; count the per-pid worker series
-  instead.
-- Config topology uses upstream *hostnames*; ingress observes resolved
-  *IPs*. Until the exporter resolves configured names, join those two by
-  vhost rather than by upstream address.
-- Ingress attribution is per-request from logs — HTTP/2 coalescing is a
-  non-issue (unlike SNI-based approaches), but vhosts with their own
-  `access_log` are invisible (see Install boundary above).
-- VRRPv3 support is implemented and unit-tested but not yet validated
-  against a live v3 pair.
-- The metrics endpoint itself has no TLS/auth; firewall it or front it if
-  the scrape network is untrusted.
+- **Privileges**: `CAP_NET_RAW` only (packet socket for VRRP). No root, no sudo. The
+  systemd unit applies a strict sandbox (`ProtectSystem=strict`, `RestrictAddressFamilies`,
+  `MemoryDenyWriteExecute`, …).
+- **Wire input is untrusted**: bounds-checked parsing, per-version checksums, and a
+  transition-cardinality cap so an on-segment attacker flooding spoofed adverts can't
+  grow memory or series unbounded (overflow surfaces in `vrrp_transitions_dropped_total`).
+- **Log input is semi-trusted**: nginx writes it, but fields echo client data — JSON
+  escaping via `escape=json`, vhost cardinality cap, negative-value guards.
+- **Honest limits**: VRRP is an unauthenticated protocol; on a hostile L2 an attacker can
+  forge mastership claims (they could equally steal the VIP itself). This exporter's
+  stance is detection — forged adverts surface as transitions, split-brain alerts, and
+  drop counters — not prevention. The metrics endpoint has no built-in auth; firewall it
+  to your scrape network.
+
+## Roadmap
+
+- Self-report cross-check (`vrrp_selfreport_mismatch`): wire state vs keepalived's own
+  opinion; disagreement is itself alertable.
+- Network-namespace integration harness (real keepalived election/preemption/split-brain
+  in CI) and live VRRPv3 validation.
+- Cluster capacity recording rules: per-cluster vhost volume joined to master state, the
+  "can cluster B absorb this vhost?" headroom model.
+- Optional eBPF ingress attribution (SNI/Host from the socket, zero config coupling) as
+  an alternative to log tailing.
+
+## License
+
+[MIT](LICENSE)
