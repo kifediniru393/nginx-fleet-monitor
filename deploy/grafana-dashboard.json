@@ -437,7 +437,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "label_replace(label_replace(sum by (vhost) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])), \"source\", \"VIP 192.168.2.154\", \"\", \"\"), \"target\", \"$1\", \"vhost\", \"(.*)\")",
+      "expr": "label_replace(label_replace(sum by (vhost) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])), \"source\", \"VIP\", \"\", \"\"), \"target\", \"$1\", \"vhost\", \"(.*)\")",
       "legendFormat": "",
       "instant": true,
       "format": "table",
