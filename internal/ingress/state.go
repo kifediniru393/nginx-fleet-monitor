@@ -36,6 +36,28 @@ func (s *Stats) Seed(vhost, addr string, now time.Time) {
 	}
 }
 
+// PruneSeeds drops upstream idle clocks that (a) have never recorded real
+// traffic and (b) are absent from the current seed set. Without this, entries
+// keyed under stale identities — a hostname seeded while DNS was down, a
+// member removed from config — linger forever and false-fire decommission
+// alerts. Entries with observed traffic are never pruned: going quiet after
+// serving is exactly the decommission signal.
+// UpstreamKey identifies one (vhost, upstream address) pair for callers.
+type UpstreamKey = upstreamKey
+
+func (s *Stats) PruneSeeds(validUpstreams map[UpstreamKey]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key := range s.UpstreamLastSeen {
+		if s.UpstreamRequests[key] == 0 && !validUpstreams[key] {
+			delete(s.UpstreamLastSeen, key)
+		}
+	}
+}
+
+// UpstreamSeedKey builds the map key for PruneSeeds' valid set.
+func UpstreamSeedKey(vhost, addr string) UpstreamKey { return upstreamKey{vhost, addr} }
+
 // SaveState atomically writes the idle-clock timestamps to path.
 func (s *Stats) SaveState(path string) error {
 	s.mu.Lock()

@@ -60,3 +60,22 @@ func TestLoadStateMissingFile(t *testing.T) {
 		t.Fatalf("missing state file should not error: %v", err)
 	}
 }
+
+func TestPruneSeeds(t *testing.T) {
+	s := NewStats(100)
+	s.Seed("a", "stale.host:80", t0)               // seeded under old identity, never observed
+	s.Seed("a", "10.0.0.1:80", t0)                 // current seed, never observed
+	s.Ingest(line("a", "10.0.0.2:80", 200, 1), t0) // real traffic, not in seed set
+
+	s.PruneSeeds(map[UpstreamKey]bool{UpstreamSeedKey("a", "10.0.0.1:80"): true})
+
+	if _, ok := s.UpstreamLastSeen[UpstreamSeedKey("a", "stale.host:80")]; ok {
+		t.Fatal("stale never-observed seed not pruned")
+	}
+	if _, ok := s.UpstreamLastSeen[UpstreamSeedKey("a", "10.0.0.1:80")]; !ok {
+		t.Fatal("current seed wrongly pruned")
+	}
+	if _, ok := s.UpstreamLastSeen[UpstreamSeedKey("a", "10.0.0.2:80")]; !ok {
+		t.Fatal("observed-traffic entry wrongly pruned — that IS the decommission signal")
+	}
+}
