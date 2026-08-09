@@ -61,7 +61,7 @@
     "gridPos": {
      "x": 0,
      "y": 0,
-     "w": 6,
+     "w": 8,
      "h": 5
     },
     "targets": [
@@ -70,8 +70,8 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1",
-      "legendFormat": "{{vip}} \u2192 {{node}}",
+      "expr": "max by (vip, vrid, observer) (nginx_fleet_vrrp_master == 1) and on (observer) label_replace(nginx_fleet_active == 1, \"observer\", \"$1\", \"node\", \"(.*)\")",
+      "legendFormat": "{{observer}} ({{vip}})",
       "instant": true,
       "refId": "A"
      }
@@ -107,9 +107,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 6,
-     "y": 0,
-     "w": 3,
+     "x": 0,
+     "y": 40,
+     "w": 6,
      "h": 5
     },
     "targets": [
@@ -148,7 +148,8 @@
      "reduceOptions": {
       "calc": "lastNotNull"
      }
-    }
+    },
+    "description": "Nodes that hold the VIP (VRRP master) but have zero nginx worker processes \u2014 traffic arrives and nothing serves it. This is the exact failure mode of the manual nginx-stop test. Anything above 0 is an outage."
    },
    {
     "id": 3,
@@ -159,9 +160,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 9,
+     "x": 16,
      "y": 0,
-     "w": 3,
+     "w": 4,
      "h": 5
     },
     "targets": [
@@ -211,9 +212,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 12,
-     "y": 0,
-     "w": 3,
+     "x": 6,
+     "y": 40,
+     "w": 6,
      "h": 5
     },
     "targets": [
@@ -254,7 +255,8 @@
      "reduceOptions": {
       "calc": "lastNotNull"
      }
-    }
+    },
+    "description": "Percentage of all requests (fleet-wide) returning 5xx. Goes red at 5%."
    },
    {
     "id": 5,
@@ -265,9 +267,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 15,
-     "y": 0,
-     "w": 3,
+     "x": 12,
+     "y": 40,
+     "w": 6,
      "h": 5
     },
     "targets": [
@@ -306,7 +308,8 @@
      "reduceOptions": {
       "calc": "lastNotNull"
      }
-    }
+    },
+    "description": "Upstream members whose most recent evidence is a failure (connect error, 502-504, or skipped via proxy_next_upstream retry)."
    },
    {
     "id": 6,
@@ -317,9 +320,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 18,
+     "x": 20,
      "y": 0,
-     "w": 3,
+     "w": 4,
      "h": 5
     },
     "targets": [
@@ -369,9 +372,9 @@
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 21,
-     "y": 0,
-     "w": 3,
+     "x": 18,
+     "y": 40,
+     "w": 6,
      "h": 5
     },
     "targets": [
@@ -410,7 +413,8 @@
      "reduceOptions": {
       "calc": "lastNotNull"
      }
-    }
+    },
+    "description": "Fleet nodes whose nginx-fleet-exporter is not answering scrapes \u2014 monitoring blind spots, not necessarily service failures."
    },
    {
     "id": 8,
@@ -816,9 +820,58 @@
       }
      }
     ]
+   },
+   {
+    "id": 14,
+    "title": "KEEPALIVED MASTER",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 8,
+     "y": 0,
+     "w": 8,
+     "h": 5
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "refId": "A",
+      "instant": true,
+      "expr": "max by (vrid, observer) (nginx_fleet_vrrp_priority) and on (observer) label_replace(nginx_fleet_active == 1, \"observer\", \"$1\", \"node\", \"(.*)\")",
+      "legendFormat": "{{observer}} \u2014 vrid {{vrid}}, priority"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        }
+       ]
+      }
+     },
+     "overrides": []
+    },
+    "options": {
+     "colorMode": "background",
+     "textMode": "value_and_name",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    },
+    "description": "Current VRRP master by hostname, with its live advertised priority. Priority drops (150\u219290) mean the nginx health check has demoted the node."
    }
   ]
  },
  "overwrite": true,
- "message": "topology scoped to selected vhost"
+ "message": "master by hostname up top; diagnostics moved down with descriptions"
 }
