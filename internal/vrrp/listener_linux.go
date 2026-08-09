@@ -18,7 +18,11 @@ import (
 // ALLMULTI membership is set so the NIC doesn't filter 224.0.0.18 frames.
 // Requires CAP_NET_RAW. Blocks until ctx is cancelled.
 func Listen(ctx context.Context, tr *Tracker) error {
-	fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_DGRAM, int(htons(unix.ETH_P_IP)))
+	// ETH_P_ALL, not ETH_P_IP: the kernel delivers *outgoing* packet copies
+	// only to ETH_P_ALL taps, and a master must observe its own adverts —
+	// keepalived builds that disable IP_MULTICAST_LOOP otherwise leave the
+	// master blind to its own mastership.
+	fd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_DGRAM, int(htons(unix.ETH_P_ALL)))
 	if err != nil {
 		return fmt.Errorf("vrrp: AF_PACKET socket (need CAP_NET_RAW): %w", err)
 	}
