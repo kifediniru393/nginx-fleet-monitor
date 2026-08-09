@@ -559,7 +559,7 @@
     },
     "gridPos": {
      "x": 0,
-     "y": 16,
+     "y": 25,
      "w": 8,
      "h": 8
     },
@@ -600,7 +600,7 @@
     },
     "gridPos": {
      "x": 0,
-     "y": 24,
+     "y": 33,
      "w": 12,
      "h": 8
     },
@@ -747,7 +747,7 @@
     },
     "gridPos": {
      "x": 12,
-     "y": 24,
+     "y": 33,
      "w": 12,
      "h": 8
     },
@@ -788,7 +788,7 @@
     },
     "gridPos": {
      "x": 0,
-     "y": 32,
+     "y": 41,
      "w": 24,
      "h": 6
     },
@@ -869,9 +869,177 @@
      }
     },
     "description": "Current VRRP master by hostname, with its live advertised priority. Priority drops (150\u219290) mean the nginx health check has demoted the node."
+   },
+   {
+    "id": 15,
+    "title": "Upstream load share (now)",
+    "type": "bargauge",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 16,
+     "w": 8,
+     "h": 9
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sort_desc(sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m])))",
+      "legendFormat": "{{upstream_addr}}",
+      "instant": true,
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "reqps",
+      "decimals": 2,
+      "thresholds": {
+       "mode": "percentage",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "orange",
+         "value": 60
+        },
+        {
+         "color": "red",
+         "value": 85
+        }
+       ]
+      }
+     },
+     "overrides": []
+    },
+    "options": {
+     "displayMode": "gradient",
+     "orientation": "horizontal",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     },
+     "showUnfilled": true
+    },
+    "description": "Requests/s each upstream member is handling right now, all vhosts combined. Color is relative to the busiest member \u2014 a lone red bar means one node is carrying the fleet."
+   },
+   {
+    "id": 16,
+    "title": "Upstream load over time",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 8,
+     "y": 16,
+     "w": 8,
+     "h": 9
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
+      "legendFormat": "{{upstream_addr}}",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "reqps",
+      "custom": {
+       "fillOpacity": 25,
+       "stacking": {
+        "mode": "normal"
+       }
+      }
+     },
+     "overrides": []
+    },
+    "description": "Stacked request rate per member. The band widths are the load split; a member's band vanishing while others grow = traffic shifted off it (down, demoted, or drained)."
+   },
+   {
+    "id": 17,
+    "title": "Upstream stress \u2014 latency under load",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 16,
+     "y": 16,
+     "w": 8,
+     "h": 9
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
+      "legendFormat": "{{upstream_addr}} latency",
+      "refId": "A"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_failures_total[5m]))",
+      "legendFormat": "{{upstream_addr}} failures/s",
+      "refId": "B"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "s",
+      "custom": {
+       "fillOpacity": 5
+      }
+     },
+     "overrides": [
+      {
+       "matcher": {
+        "id": "byRegexp",
+        "options": ".*failures.*"
+       },
+       "properties": [
+        {
+         "id": "unit",
+         "value": "reqps"
+        },
+        {
+         "id": "custom.drawStyle",
+         "value": "bars"
+        },
+        {
+         "id": "color",
+         "value": {
+          "mode": "fixed",
+          "fixedColor": "red"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    "description": "The stress signal: mean response time per member (lines) with failures/s (red bars). A member whose latency climbs as its load share grows is saturating \u2014 before it starts failing."
    }
   ]
  },
  "overwrite": true,
- "message": "master by hostname up top; diagnostics moved down with descriptions"
+ "message": "upstream load & stress row"
 }
