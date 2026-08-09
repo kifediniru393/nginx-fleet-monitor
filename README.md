@@ -108,6 +108,65 @@ it's a network partition, visible from both sides.
 
 ---
 
+## How nginx and keepalived correlate
+
+The exporter's core value is joining two worlds that are normally monitored separately —
+keepalived's **cluster state** and nginx's **serving state** — on every node, continuously:
+
+```mermaid
+flowchart LR
+    subgraph keepalived["keepalived (VRRP)"]
+        adverts["protocol-112 adverts<br/>on the wire"]
+        kaconf["keepalived.conf<br/>(membership, priorities)"]
+    end
+    subgraph nginx["nginx"]
+        conf["nginx config<br/>(vhosts, upstreams)"]
+        logs["access log<br/>(traffic per vhost/upstream)"]
+        procs["worker processes"]
+    end
+    adverts --> master["who is master, per VRID<br/>vrrp_master · transitions · stepdowns"]
+    kaconf --> members["cluster membership<br/>cluster_info (segment, vrid, vip)"]
+    conf --> intent["intended routing<br/>vhost_info · member_info"]
+    logs --> observed["observed traffic + health<br/>upstream_requests · upstream_up · idle clocks"]
+    procs --> capacity["serving capacity<br/>worker fds/cpu/rss"]
+
+    master --> j1["ACTIVE NODE<br/>nginx_fleet_active"]
+    members --> j1
+    master --> j2["BLACKHOLE ALARM<br/>master with zero workers"]
+    capacity --> j2
+    master --> j3["FAILOVER-AWARE ATTRIBUTION<br/>traffic joined to who held the VIP,<br/>no double-counting through failover"]
+    observed --> j3
+    intent --> j4["CONFIG HYGIENE<br/>dead configs · down members · drift"]
+    observed --> j4
+```
+
+The four joins, concretely:
+
+1. **Active node** — `nginx_fleet_active{node, method="vrrp"}` is derived by checking
+   whether the wire-observed master's IP belongs to this node. Every "is this VM serving?"
+   dashboard question is one gauge, valid across failovers.
+2. **Blackhole detection** — mastership and serving are deliberately separate signals, and
+   their *disagreement* is the alert: a node that holds the VIP (`vrrp_master == 1`) with
+   zero nginx worker processes is receiving traffic and serving nothing. Stock keepalived
+   without a `vrrp_script` tracking nginx will happily sit in this state forever; the
+   exporter makes it a red number on the wall. (The deploy docs include the
+   `vrrp_script`/priority-weight pattern that turns this from an alert into an automatic
+   failover — and the exporter then shows the priority dropping as the health check demotes
+   the node.)
+3. **Failover-aware traffic attribution** — cluster rollups join per-vhost/per-upstream
+   traffic against `vrrp_master == 1` on the VRID rather than summing across nodes, so
+   "who served this traffic through which VIP" stays correct through a failover: the old
+   master's counters stop, the new master's start, transitions are counted exactly once,
+   and the Grafana failover annotations line the two up visually.
+4. **Config hygiene** — nginx intent (configured vhosts/members) diffed against nginx
+   observation (traffic, failures), with keepalived context deciding *where* those
+   configs should be serving from.
+
+The correlation is also why the exporter runs on **every** node of a pair, standby
+included: backups are silent in VRRP, so the standby's exporter is both the witness that
+records a master's death (its own exporter dies with it) and the proof that the standby's
+nginx is warm and ready *before* the VIP arrives.
+
 ## Quick start
 
 ```sh
