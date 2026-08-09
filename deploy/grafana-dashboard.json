@@ -872,7 +872,7 @@
    },
    {
     "id": 15,
-    "title": "Upstream load share (now)",
+    "title": "$vhost \u2014 upstream load share (now)",
     "type": "bargauge",
     "datasource": {
      "type": "prometheus",
@@ -890,7 +890,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sort_desc(sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m])))",
+      "expr": "sort_desc(sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])))",
       "legendFormat": "{{upstream_addr}}",
       "instant": true,
       "refId": "A"
@@ -932,7 +932,7 @@
    },
    {
     "id": 16,
-    "title": "Upstream load over time",
+    "title": "$vhost \u2014 upstream load over time",
     "type": "timeseries",
     "datasource": {
      "type": "prometheus",
@@ -950,7 +950,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}}",
       "refId": "A"
      }
@@ -971,7 +971,7 @@
    },
    {
     "id": 17,
-    "title": "Upstream stress \u2014 latency under load",
+    "title": "$vhost \u2014 upstream stress: latency under load",
     "type": "timeseries",
     "datasource": {
      "type": "prometheus",
@@ -989,7 +989,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=\"$vhost\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}} latency",
       "refId": "A"
      },
@@ -998,7 +998,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_failures_total[5m]))",
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}} failures/s",
       "refId": "B"
      }
@@ -1041,5 +1041,5 @@
   ]
  },
  "overwrite": true,
- "message": "upstream load & stress row"
+ "message": "upstream load row scoped to selected vhost"
 }
