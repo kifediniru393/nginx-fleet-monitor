@@ -34,6 +34,7 @@ func main() {
 	accessLog := flag.String("ingress.access-log", "", "path to the 'fleet' JSON access log; empty disables the ingress collector")
 	maxVhosts := flag.Int("ingress.max-vhosts", 500, "distinct vhost labels before folding into _other")
 	stateFile := flag.String("ingress.state-file", "/var/lib/nginx-fleet-exporter/state.json", "idle-clock persistence; empty disables")
+	stubURI := flag.String("stub.scrape-uri", "", "nginx stub_status URL; emits official nginx-prometheus-exporter compatible metrics (nginx_up, nginx_connections_*); empty disables")
 	decommissionWindow := flag.Duration("decommission-window", 120*time.Hour, "idle window after which an upstream is a decommission candidate (informational; consumed by recording rules)")
 	flag.Parse()
 
@@ -48,6 +49,9 @@ func main() {
 	cfgCollector := collectors.NewConfigCollector(strings.Fields(*nginxTCmd), *nginxConf, *configInterval)
 	reg.MustRegister(cfgCollector)
 	reg.MustRegister(collectors.WorkersCollector{})
+	if *stubURI != "" {
+		reg.MustRegister(collectors.NewStubCollector(*stubURI))
+	}
 
 	reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "nginx_fleet_decommission_window_seconds",
@@ -61,6 +65,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	cfgCollector.StartResolver(ctx)
+	tlsProbe := collectors.NewTLSProbeCollector(cfgCollector)
+	tlsProbe.Start(ctx)
+	reg.MustRegister(tlsProbe)
 
 	if *vrrpMode != "off" {
 		go func() {

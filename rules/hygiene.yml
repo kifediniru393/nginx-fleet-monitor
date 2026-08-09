@@ -84,3 +84,26 @@ groups:
           severity: critical
         annotations:
           summary: "VRID {{ $labels.vrid }}: more than one node advertising as master."
+
+      # TLS certificate hygiene — probed via SNI against the local listener,
+      # measuring the certificate clients actually receive.
+      - alert: NginxVhostCertExpiringSoon
+        expr: |
+          (nginx_fleet_vhost_cert_expiry_timestamp_seconds - time()) < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            Certificate served for {{ $labels.vhost }}:{{ $labels.listen_port }}
+            expires in under 14 days.
+
+      - alert: NginxVhostServingWrongCert
+        expr: nginx_fleet_vhost_cert_san_match == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            {{ $labels.vhost }}:{{ $labels.listen_port }} serves a certificate
+            that is not valid for its own name (SNI/config bug).

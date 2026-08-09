@@ -124,3 +124,19 @@ func TestIngestNegativeBytesIgnored(t *testing.T) {
 		t.Fatalf("negative bytes corrupted counters: %d/%d", s.BytesSent[vhostKey{"a"}], s.BytesReceived[vhostKey{"a"}])
 	}
 }
+
+func TestUpstreamLatencyHistogram(t *testing.T) {
+	s := NewStats(100)
+	for _, ut := range []string{"0.004", "0.03", "0.03", "2.0", "60"} {
+		s.Ingest(`{"host":"a","upstream":"10.0.0.1:80","bytes_sent":1,"request_length":1,"status":200,"upstream_time":"`+ut+`"}`, t0)
+	}
+	key := upstreamKey{"a", "10.0.0.1:80"}
+	h := s.UpstreamTimeHist[key]
+	if h == nil || s.UpstreamTimeCount[key] != 5 {
+		t.Fatalf("count = %d", s.UpstreamTimeCount[key])
+	}
+	// 0.004 -> le=0.005 (idx 0); 0.03 x2 -> le=0.05 (idx 3); 2.0 -> le=2.5 (idx 8); 60 -> +Inf (idx 11)
+	if h[0] != 1 || h[3] != 2 || h[8] != 1 || h[len(TimeBuckets)] != 1 {
+		t.Fatalf("buckets = %v", h)
+	}
+}

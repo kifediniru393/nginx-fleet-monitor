@@ -18,8 +18,8 @@ var (
 		[]string{"vhost", "upstream_addr", "reason"}, nil)
 	upLastDesc = prometheus.NewDesc("nginx_fleet_upstream_last_traffic_timestamp_seconds",
 		"Unix time of the last observed request to the upstream member.", []string{"vhost", "upstream_addr"}, nil)
-	upTimeDesc = prometheus.NewDesc("nginx_fleet_upstream_response_seconds_sum",
-		"Sum of $upstream_response_time per member (divide by requests for mean).",
+	upTimeDesc = prometheus.NewDesc("nginx_fleet_upstream_response_seconds",
+		"Histogram of $upstream_response_time per member (buckets give per-member percentiles).",
 		[]string{"vhost", "upstream_addr"}, nil)
 	upUpDesc = prometheus.NewDesc("nginx_fleet_upstream_up",
 		"1 if the most recent evidence for this member is a success.", []string{"vhost", "upstream_addr"}, nil)
@@ -89,8 +89,14 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		}
 		ch <- prometheus.MustNewConstMetric(upUpDesc, prometheus.GaugeValue, up, k.vhost, k.addr)
 	}
-	for k, sum := range s.UpstreamTimeSum {
-		ch <- prometheus.MustNewConstMetric(upTimeDesc, prometheus.CounterValue, sum, k.vhost, k.addr)
+	for k, h := range s.UpstreamTimeHist {
+		buckets := map[float64]uint64{}
+		var cum uint64
+		for i, le := range TimeBuckets {
+			cum += h[i]
+			buckets[le] = cum
+		}
+		ch <- prometheus.MustNewConstHistogram(upTimeDesc, s.UpstreamTimeCount[k], s.UpstreamTimeSum[k], buckets, k.vhost, k.addr)
 	}
 	for reason, n := range s.Unattributed {
 		ch <- prometheus.MustNewConstMetric(unattribDesc, prometheus.CounterValue, float64(n), reason)

@@ -50,6 +50,11 @@ type Stats struct {
 	UpstreamLastOK   map[upstreamKey]time.Time
 	UpstreamLastFail map[upstreamKey]time.Time
 	UpstreamTimeSum  map[upstreamKey]float64
+	// Histogram of $upstream_response_time per member: non-cumulative counts
+	// per bucket (cumulated at collect time), plus an observation count.
+	// Buckets give per-member percentiles — means hide the saturating tail.
+	UpstreamTimeHist  map[upstreamKey]*[len(TimeBuckets) + 1]uint64 // last slot = +Inf
+	UpstreamTimeCount map[upstreamKey]uint64
 
 	Unattributed map[string]uint64 // reason -> count
 
@@ -67,7 +72,9 @@ func NewStats(maxVhosts int) *Stats {
 		UpstreamLastSeen: map[upstreamKey]time.Time{},
 		UpstreamLastOK:   map[upstreamKey]time.Time{},
 		UpstreamLastFail: map[upstreamKey]time.Time{},
-		UpstreamTimeSum:  map[upstreamKey]float64{},
+		UpstreamTimeSum:   map[upstreamKey]float64{},
+		UpstreamTimeHist:  map[upstreamKey]*[len(TimeBuckets) + 1]uint64{},
+		UpstreamTimeCount: map[upstreamKey]uint64{},
 		Unattributed:     map[string]uint64{},
 		maxVhosts:        maxVhosts,
 	}
@@ -118,8 +125,15 @@ func (s *Stats) Ingest(raw string, now time.Time) {
 		s.UpstreamRequests[key]++
 		s.UpstreamLastSeen[key] = now
 		if i < len(times) {
-			if t, err := strconv.ParseFloat(times[i], 64); err == nil {
+			if t, err := strconv.ParseFloat(times[i], 64); err == nil && t >= 0 {
 				s.UpstreamTimeSum[key] += t
+				h := s.UpstreamTimeHist[key]
+				if h == nil {
+					h = &[len(TimeBuckets) + 1]uint64{}
+					s.UpstreamTimeHist[key] = h
+				}
+				h[bucketIndex(t)]++
+				s.UpstreamTimeCount[key]++
 			}
 		}
 		final := i == len(attempts)-1
@@ -155,6 +169,18 @@ func (s *Stats) capVhost(host string) string {
 // down if its most recent evidence is a failure.
 func (s *Stats) Up(key upstreamKey) bool {
 	return !s.UpstreamLastOK[key].Before(s.UpstreamLastFail[key])
+}
+
+// TimeBuckets are the upstream latency histogram bounds (Prometheus defaults).
+var TimeBuckets = [...]float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10}
+
+func bucketIndex(t float64) int {
+	for i, le := range TimeBuckets {
+		if t <= le {
+			return i
+		}
+	}
+	return len(TimeBuckets) // +Inf
 }
 
 func statusClass(code int) string {
