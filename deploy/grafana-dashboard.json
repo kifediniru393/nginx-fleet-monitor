@@ -419,7 +419,7 @@
    },
    {
     "id": 8,
-    "title": "$vhost \u2014 live topology: VIP \u2192 vhost \u2192 upstream (req/s)",
+    "title": "$vhost \u2014 live topology: vhost \u2192 VIP \u2192 upstreams (req/s)",
     "type": "nodeGraph",
     "datasource": {
      "type": "prometheus",
@@ -437,60 +437,64 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "label_replace(label_replace(sum by (vhost) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])), \"source\", \"VIP\", \"\", \"\"), \"target\", \"$1\", \"vhost\", \"(.*)\")",
-      "legendFormat": "",
+      "refId": "A",
       "instant": true,
       "format": "table",
-      "refId": "A"
-     },
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "expr": "label_replace(label_replace(sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")",
-      "legendFormat": "",
-      "instant": true,
-      "format": "table",
-      "refId": "B"
+      "expr": "(sum by (source, target) (label_replace(label_replace(sum by (vhost, instance) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"vip\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace(sum by (upstream_addr, instance) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vip\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")))"
      }
     ],
     "fieldConfig": {
      "defaults": {},
-     "overrides": []
+     "overrides": [
+      {
+       "matcher": {
+        "id": "byName",
+        "options": "mainstat"
+       },
+       "properties": [
+        {
+         "id": "displayName",
+         "value": "req/s"
+        },
+        {
+         "id": "unit",
+         "value": "reqps"
+        },
+        {
+         "id": "decimals",
+         "value": 2
+        }
+       ]
+      }
+     ]
     },
     "transformations": [
-     {
-      "id": "merge",
-      "options": {}
-     },
-     {
-      "id": "organize",
-      "options": {
-       "excludeByName": {
-        "Time": true,
-        "vhost": true,
-        "upstream_addr": true
-       },
-       "renameByName": {
-        "Value": "mainstat"
-       }
-      }
-     },
      {
       "id": "calculateField",
       "options": {
        "mode": "index",
        "alias": "id"
       }
+     },
+     {
+      "id": "organize",
+      "options": {
+       "excludeByName": {
+        "Time": true
+       },
+       "renameByName": {
+        "Value": "mainstat"
+       }
+      }
      }
     ],
     "options": {
-     "nodes": {},
      "edges": {
       "mainStatUnit": "reqps"
-     }
-    }
+     },
+     "nodes": {}
+    },
+    "description": "Request flow for the selected vhost: clients resolve the vhost name to its cluster VIP, the VIP holder's nginx proxies to the upstream members. Edge numbers are req/s. Non-VIP deployments (no keepalived) show no VIP hop."
    },
    {
     "id": 9,
@@ -1050,7 +1054,7 @@
    },
    {
     "id": 18,
-    "title": "TLS certificates \u2014 served per node (drift = pair members disagree)",
+    "title": "$vhost \u2014 TLS certificate per node (rows disagreeing = drift between pair members)",
     "type": "table",
     "datasource": {
      "type": "prometheus",
@@ -1072,7 +1076,7 @@
       "refId": "A",
       "instant": true,
       "format": "table",
-      "expr": "(nginx_fleet_vhost_cert_expiry_timestamp_seconds - time()) / 86400"
+      "expr": "(nginx_fleet_vhost_cert_expiry_timestamp_seconds{vhost=\"$vhost\"} - time()) / 86400"
      },
      {
       "datasource": {
@@ -1082,7 +1086,7 @@
       "refId": "B",
       "instant": true,
       "format": "table",
-      "expr": "nginx_fleet_vhost_cert_san_match"
+      "expr": "nginx_fleet_vhost_cert_san_match{vhost=\"$vhost\"}"
      }
     ],
     "transformations": [
