@@ -1,22 +1,58 @@
 {
  "dashboard": {
   "uid": "nginx-fleet",
-  "title": "nginx Fleet",
+  "title": "nginx Fleet \u2014 Operations",
   "tags": [
    "nginx",
-   "keepalived"
+   "keepalived",
+   "noc"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "refresh": "30s",
+  "refresh": "10s",
   "time": {
-   "from": "now-6h",
+   "from": "now-3h",
    "to": "now"
+  },
+  "templating": {
+   "list": [
+    {
+     "name": "vhost",
+     "type": "query",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "bfum9nnilgflsf"
+     },
+     "refresh": 2,
+     "query": {
+      "query": "label_values(nginx_fleet_ingress_requests_total, vhost)",
+      "refId": "var"
+     },
+     "includeAll": false,
+     "multi": false,
+     "current": {}
+    }
+   ]
+  },
+  "annotations": {
+   "list": [
+    {
+     "name": "failovers",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "bfum9nnilgflsf"
+     },
+     "enable": true,
+     "iconColor": "red",
+     "expr": "sum(increase(nginx_fleet_vrrp_transitions_total[1m])) > 0",
+     "titleFormat": "VRRP failover"
+    }
+   ]
   },
   "panels": [
    {
     "id": 1,
-    "title": "VIP holder",
+    "title": "VIP HOLDER",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -25,8 +61,8 @@
     "gridPos": {
      "x": 0,
      "y": 0,
-     "w": 8,
-     "h": 4
+     "w": 6,
+     "h": 5
     },
     "targets": [
      {
@@ -35,18 +71,28 @@
        "uid": "bfum9nnilgflsf"
       },
       "expr": "max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1",
-      "legendFormat": "{{vip}} \u2192 {{node}} (vrid {{vrid}})",
-      "refId": "A",
-      "instant": true
+      "legendFormat": "{{vip}} \u2192 {{node}}",
+      "instant": true,
+      "refId": "A"
      }
     ],
     "fieldConfig": {
-     "defaults": {},
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "blue",
+         "value": null
+        }
+       ]
+      }
+     },
      "overrides": []
     },
     "options": {
-     "textMode": "name",
      "colorMode": "background",
+     "textMode": "name",
      "reduceOptions": {
       "calc": "lastNotNull"
      }
@@ -54,17 +100,17 @@
    },
    {
     "id": 2,
-    "title": "Active node",
+    "title": "BLACKHOLE",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 8,
+     "x": 6,
      "y": 0,
-     "w": 4,
-     "h": 4
+     "w": 3,
+     "h": 5
     },
     "targets": [
      {
@@ -72,19 +118,33 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "nginx_fleet_active == 1",
-      "legendFormat": "{{node}} ({{method}})",
-      "refId": "A",
-      "instant": true
+      "expr": "count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open) or vector(0)",
+      "legendFormat": "master w/o nginx",
+      "instant": true,
+      "refId": "A"
      }
     ],
     "fieldConfig": {
-     "defaults": {},
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "red",
+         "value": 1
+        }
+       ]
+      }
+     },
      "overrides": []
     },
     "options": {
-     "textMode": "name",
      "colorMode": "background",
+     "textMode": "value_and_name",
      "reduceOptions": {
       "calc": "lastNotNull"
      }
@@ -92,7 +152,59 @@
    },
    {
     "id": 3,
-    "title": "Cluster members",
+    "title": "SPLIT BRAIN",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 9,
+     "y": 0,
+     "w": 3,
+     "h": 5
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master) == 1) > 1) or vector(0)",
+      "legendFormat": "vrids w/ 2 masters",
+      "instant": true,
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "red",
+         "value": 1
+        }
+       ]
+      }
+     },
+     "overrides": []
+    },
+    "options": {
+     "colorMode": "background",
+     "textMode": "value_and_name",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    }
+   },
+   {
+    "id": 4,
+    "title": "5XX RATE",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -102,7 +214,7 @@
      "x": 12,
      "y": 0,
      "w": 3,
-     "h": 4
+     "h": 5
     },
     "targets": [
      {
@@ -110,25 +222,43 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "count by (vrid) (count by (vrid, member_node) (nginx_fleet_cluster_info))",
-      "legendFormat": "VRID {{vrid}}",
-      "refId": "A",
-      "instant": true
+      "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total[5m]))",
+      "legendFormat": "of all requests",
+      "instant": true,
+      "refId": "A"
      }
     ],
     "fieldConfig": {
-     "defaults": {},
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "red",
+         "value": 5
+        }
+       ]
+      },
+      "unit": "percent",
+      "decimals": 1
+     },
      "overrides": []
     },
     "options": {
+     "colorMode": "background",
+     "textMode": "value_and_name",
      "reduceOptions": {
       "calc": "lastNotNull"
      }
     }
    },
    {
-    "id": 4,
-    "title": "Exporters up",
+    "id": 5,
+    "title": "UPSTREAMS DOWN",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -138,7 +268,7 @@
      "x": 15,
      "y": 0,
      "w": 3,
-     "h": 4
+     "h": 5
     },
     "targets": [
      {
@@ -146,25 +276,41 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum(up{job=\"nginx-fleet\"})",
-      "legendFormat": "up",
-      "refId": "A",
-      "instant": true
+      "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up) == 0) or vector(0)",
+      "legendFormat": "members",
+      "instant": true,
+      "refId": "A"
      }
     ],
     "fieldConfig": {
-     "defaults": {},
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "red",
+         "value": 1
+        }
+       ]
+      }
+     },
      "overrides": []
     },
     "options": {
+     "colorMode": "background",
+     "textMode": "value_and_name",
      "reduceOptions": {
       "calc": "lastNotNull"
      }
     }
    },
    {
-    "id": 5,
-    "title": "Master but no nginx workers",
+    "id": 6,
+    "title": "IDLE > 5 DAYS",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -173,8 +319,8 @@
     "gridPos": {
      "x": 18,
      "y": 0,
-     "w": 6,
-     "h": 4
+     "w": 3,
+     "h": 5
     },
     "targets": [
      {
@@ -182,61 +328,51 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open) or vector(0)",
-      "legendFormat": "blackholed",
-      "refId": "A",
-      "instant": true
+      "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds)) > 432000) or vector(0)",
+      "legendFormat": "decommission",
+      "instant": true,
+      "refId": "A"
      }
     ],
     "fieldConfig": {
-     "defaults": {},
-     "overrides": [
-      {
-       "matcher": {
-        "id": "byName",
-        "options": "blackholed"
-       },
-       "properties": [
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
         {
-         "id": "thresholds",
-         "value": {
-          "mode": "absolute",
-          "steps": [
-           {
-            "color": "green",
-            "value": null
-           },
-           {
-            "color": "red",
-            "value": 1
-           }
-          ]
-         }
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "red",
+         "value": 1
         }
        ]
       }
-     ]
+     },
+     "overrides": []
     },
     "options": {
      "colorMode": "background",
+     "textMode": "value_and_name",
      "reduceOptions": {
       "calc": "lastNotNull"
      }
     }
    },
    {
-    "id": 6,
-    "title": "Failovers & stepdowns",
-    "type": "timeseries",
+    "id": 7,
+    "title": "EXPORTERS DOWN",
+    "type": "stat",
     "datasource": {
      "type": "prometheus",
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 0,
-     "y": 4,
-     "w": 12,
-     "h": 7
+     "x": 21,
+     "y": 0,
+     "w": 3,
+     "h": 5
     },
     "targets": [
      {
@@ -244,8 +380,62 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total[5m])) > 0",
-      "legendFormat": "{{from_node}} \u2192 {{to_node}}",
+      "expr": "count(up{job=\"nginx-fleet\"} == 0) or vector(0)",
+      "legendFormat": "of fleet",
+      "instant": true,
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        },
+        {
+         "color": "red",
+         "value": 1
+        }
+       ]
+      }
+     },
+     "overrides": []
+    },
+    "options": {
+     "colorMode": "background",
+     "textMode": "value_and_name",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    }
+   },
+   {
+    "id": 8,
+    "title": "Live traffic topology \u2014 VIP \u2192 vhost \u2192 upstream (req/s)",
+    "type": "nodeGraph",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 5,
+     "w": 14,
+     "h": 11
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "label_replace(label_replace(sum by (vhost) (rate(nginx_fleet_ingress_requests_total[5m])), \"source\", \"VIP 192.168.2.154\", \"\", \"\"), \"target\", \"$1\", \"vhost\", \"(.*)\")",
+      "legendFormat": "",
+      "instant": true,
+      "format": "table",
       "refId": "A"
      },
      {
@@ -253,93 +443,63 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (vrid) (increase(nginx_fleet_vrrp_stepdowns_total[5m])) > 0",
-      "legendFormat": "stepdown vrid {{vrid}}",
+      "expr": "label_replace(label_replace(sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m])), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")",
+      "legendFormat": "",
+      "instant": true,
+      "format": "table",
       "refId": "B"
      }
     ],
     "fieldConfig": {
      "defaults": {},
      "overrides": []
-    }
-   },
-   {
-    "id": 7,
-    "title": "Advert age by observer (staleness / partition signal)",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
     },
-    "gridPos": {
-     "x": 12,
-     "y": 4,
-     "w": 12,
-     "h": 7
-    },
-    "targets": [
+    "transformations": [
      {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "expr": "max by (vrid, observer) (nginx_fleet_vrrp_last_advert_age_seconds)",
-      "legendFormat": "vrid {{vrid}} seen by {{observer}}",
-      "refId": "A"
+      "id": "merge",
+      "options": {}
+     },
+     {
+      "id": "organize",
+      "options": {
+       "excludeByName": {
+        "Time": true,
+        "vhost": true,
+        "upstream_addr": true
+       },
+       "renameByName": {
+        "Value": "mainstat"
+       }
+      }
+     },
+     {
+      "id": "calculateField",
+      "options": {
+       "mode": "index",
+       "alias": "id"
+      }
      }
     ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "s"
-     },
-     "overrides": []
-    }
-   },
-   {
-    "id": 8,
-    "title": "Requests by vhost",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 11,
-     "w": 12,
-     "h": 8
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "expr": "sum by (vhost, status_class) (rate(nginx_fleet_ingress_requests_total[5m]))",
-      "legendFormat": "{{vhost}} {{status_class}}",
-      "refId": "A"
+    "options": {
+     "nodes": {},
+     "edges": {
+      "mainStatUnit": "reqps"
      }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "reqps"
-     },
-     "overrides": []
     }
    },
    {
     "id": 9,
-    "title": "Requests by upstream member",
-    "type": "timeseries",
+    "title": "Flow detail",
+    "type": "table",
     "datasource": {
      "type": "prometheus",
      "uid": "bfum9nnilgflsf"
     },
     "gridPos": {
-     "x": 12,
-     "y": 11,
-     "w": 12,
-     "h": 8
+     "x": 14,
+     "y": 5,
+     "w": 10,
+     "h": 11
     },
     "targets": [
      {
@@ -348,20 +508,46 @@
        "uid": "bfum9nnilgflsf"
       },
       "expr": "sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
-      "legendFormat": "{{vhost}} \u2192 {{upstream_addr}}",
+      "legendFormat": "",
+      "instant": true,
+      "format": "table",
       "refId": "A"
      }
     ],
     "fieldConfig": {
      "defaults": {
-      "unit": "reqps"
+      "decimals": 2
      },
      "overrides": []
-    }
+    },
+    "transformations": [
+     {
+      "id": "organize",
+      "options": {
+       "excludeByName": {
+        "Time": true
+       },
+       "renameByName": {
+        "Value": "req/s"
+       }
+      }
+     },
+     {
+      "id": "sortBy",
+      "options": {
+       "sort": [
+        {
+         "field": "req/s",
+         "desc": true
+        }
+       ]
+      }
+     }
+    ]
    },
    {
     "id": 10,
-    "title": "Bytes by vhost",
+    "title": "$vhost \u2014 requests by status",
     "type": "timeseries",
     "datasource": {
      "type": "prometheus",
@@ -369,9 +555,9 @@
     },
     "gridPos": {
      "x": 0,
-     "y": 19,
-     "w": 12,
-     "h": 7
+     "y": 16,
+     "w": 8,
+     "h": 8
     },
     "targets": [
      {
@@ -379,120 +565,30 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (vhost, direction) (rate(nginx_fleet_ingress_bytes_total[5m]))",
-      "legendFormat": "{{vhost}} {{direction}}",
+      "expr": "sum by (status_class) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m]))",
+      "legendFormat": "{{status_class}}",
       "refId": "A"
      }
     ],
     "fieldConfig": {
      "defaults": {
-      "unit": "Bps"
+      "unit": "reqps",
+      "custom": {
+       "fillOpacity": 15,
+       "stacking": {
+        "mode": "normal"
+       }
+      }
      },
      "overrides": []
-    }
+    },
+    "repeat": "vhost",
+    "repeatDirection": "h",
+    "maxPerRow": 3
    },
    {
     "id": 11,
-    "title": "Upstream mean response time",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
-    },
-    "gridPos": {
-     "x": 12,
-     "y": 19,
-     "w": 12,
-     "h": 7
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "expr": "sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum[5m])) / sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total[5m]))",
-      "legendFormat": "{{vhost}} \u2192 {{upstream_addr}}",
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "s"
-     },
-     "overrides": []
-    }
-   },
-   {
-    "id": 12,
-    "title": "Upstream up/down (empirical)",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 26,
-     "w": 12,
-     "h": 7
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "expr": "max by (vhost, upstream_addr) (nginx_fleet_upstream_up)",
-      "legendFormat": "{{vhost}} \u2192 {{upstream_addr}}",
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {},
-     "overrides": []
-    },
-    "options": {
-     "legend": {
-      "displayMode": "list"
-     }
-    }
-   },
-   {
-    "id": 13,
-    "title": "Upstream failures by reason",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
-    },
-    "gridPos": {
-     "x": 12,
-     "y": 26,
-     "w": 12,
-     "h": 7
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "expr": "sum by (vhost, upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total[5m]))",
-      "legendFormat": "{{upstream_addr}} {{reason}}",
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "reqps"
-     },
-     "overrides": []
-    }
-   },
-   {
-    "id": 14,
-    "title": "Idle time \u2014 decommission candidates at 5d",
+    "title": "$vhost \u2014 upstream members",
     "type": "table",
     "datasource": {
      "type": "prometheus",
@@ -500,7 +596,7 @@
     },
     "gridPos": {
      "x": 0,
-     "y": 33,
+     "y": 24,
      "w": 12,
      "h": 8
     },
@@ -510,85 +606,10 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sort_desc((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds)) / 86400)",
+      "expr": "max by (upstream_addr) (nginx_fleet_upstream_up{vhost=\"$vhost\"})",
       "legendFormat": "",
-      "refId": "A",
       "instant": true,
-      "format": "table"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "none"
-     },
-     "overrides": [
-      {
-       "matcher": {
-        "id": "byName",
-        "options": "Value"
-       },
-       "properties": [
-        {
-         "id": "displayName",
-         "value": "idle days"
-        },
-        {
-         "id": "decimals",
-         "value": 2
-        },
-        {
-         "id": "thresholds",
-         "value": {
-          "mode": "absolute",
-          "steps": [
-           {
-            "color": "green",
-            "value": null
-           },
-           {
-            "color": "orange",
-            "value": 3
-           },
-           {
-            "color": "red",
-            "value": 5
-           }
-          ]
-         }
-        },
-        {
-         "id": "custom.cellOptions",
-         "value": {
-          "type": "color-background"
-         }
-        }
-       ]
-      }
-     ]
-    }
-   },
-   {
-    "id": 15,
-    "title": "Worker capacity",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
-    },
-    "gridPos": {
-     "x": 12,
-     "y": 33,
-     "w": 12,
-     "h": 8
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "expr": "sum by (instance) (nginx_fleet_worker_fds_open)",
-      "legendFormat": "{{instance}} fds open",
+      "format": "table",
       "refId": "A"
      },
      {
@@ -596,8 +617,10 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (instance) (rate(nginx_fleet_worker_cpu_seconds_total[5m]))",
-      "legendFormat": "{{instance}} cpu",
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+      "legendFormat": "",
+      "instant": true,
+      "format": "table",
       "refId": "B"
      },
      {
@@ -605,84 +628,22 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "sum by (instance) (nginx_fleet_worker_rss_bytes) / 1048576",
-      "legendFormat": "{{instance}} rss MiB",
+      "expr": "(time() - max by (upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=\"$vhost\"})) / 3600",
+      "legendFormat": "",
+      "instant": true,
+      "format": "table",
       "refId": "C"
      }
     ],
     "fieldConfig": {
-     "defaults": {},
-     "overrides": []
-    }
-   },
-   {
-    "id": 16,
-    "title": "VIPs (configured vs held)",
-    "type": "table",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 41,
-     "w": 24,
-     "h": 6
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "refId": "A",
-      "instant": true,
-      "format": "table",
-      "expr": "max by (segment, vrid, vip) (nginx_fleet_cluster_info)"
+     "defaults": {
+      "decimals": 2
      },
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
-      },
-      "refId": "B",
-      "instant": true,
-      "format": "table",
-      "expr": "max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1"
-     }
-    ],
-    "transformations": [
-     {
-      "id": "joinByField",
-      "options": {
-       "byField": "vip",
-       "mode": "outer"
-      }
-     },
-     {
-      "id": "organize",
-      "options": {
-       "excludeByName": {
-        "Time": true,
-        "Time 1": true,
-        "Time 2": true,
-        "Value #A": true
-       },
-       "renameByName": {
-        "vrid 1": "vrid",
-        "node": "current master",
-        "Value #B": "held"
-       }
-      }
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {},
      "overrides": [
       {
        "matcher": {
         "id": "byName",
-        "options": "held"
+        "options": "up"
        },
        "properties": [
         {
@@ -692,17 +653,11 @@
            "type": "value",
            "options": {
             "1": {
-             "text": "yes",
+             "text": "UP",
              "color": "green"
-            }
-           }
-          },
-          {
-           "type": "special",
-           "options": {
-            "match": "null",
-            "result": {
-             "text": "NO MASTER",
+            },
+            "0": {
+             "text": "DOWN",
              "color": "red"
             }
            }
@@ -716,13 +671,154 @@
          }
         }
        ]
+      },
+      {
+       "matcher": {
+        "id": "byName",
+        "options": "idle (h)"
+       },
+       "properties": [
+        {
+         "id": "thresholds",
+         "value": {
+          "mode": "absolute",
+          "steps": [
+           {
+            "color": "green",
+            "value": null
+           },
+           {
+            "color": "orange",
+            "value": 72
+           },
+           {
+            "color": "red",
+            "value": 120
+           }
+          ]
+         }
+        },
+        {
+         "id": "custom.cellOptions",
+         "value": {
+          "type": "color-background"
+         }
+        }
+       ]
       }
      ]
     },
-    "options": {}
+    "transformations": [
+     {
+      "id": "joinByField",
+      "options": {
+       "byField": "upstream_addr",
+       "mode": "outer"
+      }
+     },
+     {
+      "id": "organize",
+      "options": {
+       "excludeByName": {
+        "Time 1": true,
+        "Time 2": true,
+        "Time 3": true
+       },
+       "renameByName": {
+        "Value #A": "up",
+        "Value #B": "req/s",
+        "Value #C": "idle (h)"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": 12,
+    "title": "$vhost \u2014 upstream latency & failures",
+    "type": "timeseries",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 12,
+     "y": 24,
+     "w": 12,
+     "h": 8
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=\"$vhost\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+      "legendFormat": "{{upstream_addr}} latency",
+      "refId": "A"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "sum by (upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
+      "legendFormat": "{{upstream_addr}} {{reason}}",
+      "refId": "B"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "unit": "s"
+     },
+     "overrides": []
+    }
+   },
+   {
+    "id": 13,
+    "title": "$vhost \u2014 configured listeners & backends",
+    "type": "table",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 32,
+     "w": 24,
+     "h": 6
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "max by (listen_port, tls, upstream_addr, config_file) (nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+      "legendFormat": "",
+      "instant": true,
+      "format": "table",
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {},
+     "overrides": []
+    },
+    "transformations": [
+     {
+      "id": "organize",
+      "options": {
+       "excludeByName": {
+        "Time": true,
+        "Value": true
+       }
+      }
+     }
+    ]
    }
   ]
  },
  "overwrite": true,
- "message": "nginx-fleet-exporter dashboard"
+ "message": "ops redesign: NOC wall, topology, per-vhost drill-down"
 }
