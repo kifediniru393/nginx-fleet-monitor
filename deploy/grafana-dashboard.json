@@ -1002,6 +1002,15 @@
       "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}} failures/s",
       "refId": "B"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "refId": "C",
+      "expr": "histogram_quantile(0.99, sum by (upstream_addr, le) (rate(nginx_fleet_upstream_response_seconds_bucket{vhost=\"$vhost\"}[10m])))",
+      "legendFormat": "{{upstream_addr}} p99"
      }
     ],
     "fieldConfig": {
@@ -1038,6 +1047,161 @@
      ]
     },
     "description": "The stress signal: mean response time per member (lines) with failures/s (red bars). A member whose latency climbs as its load share grows is saturating \u2014 before it starts failing."
+   },
+   {
+    "id": 18,
+    "title": "TLS certificates \u2014 served per node (drift = pair members disagree)",
+    "type": "table",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 47,
+     "w": 24,
+     "h": 7
+    },
+    "description": "Certificate actually served for each TLS vhost, probed via SNI on every node. Rows for the same vhost with different expiry = certificate drift between HA pair members \u2014 a failover would change what clients see. 'valid for name' 0 = wrong cert served entirely.",
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "refId": "A",
+      "instant": true,
+      "format": "table",
+      "expr": "(nginx_fleet_vhost_cert_expiry_timestamp_seconds - time()) / 86400"
+     },
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "refId": "B",
+      "instant": true,
+      "format": "table",
+      "expr": "nginx_fleet_vhost_cert_san_match"
+     }
+    ],
+    "transformations": [
+     {
+      "id": "joinByField",
+      "options": {
+       "byField": "vhost",
+       "mode": "outer"
+      }
+     },
+     {
+      "id": "organize",
+      "options": {
+       "excludeByName": {
+        "Time 1": true,
+        "Time 2": true,
+        "listen_port 2": true,
+        "instance 2": true,
+        "job 1": true,
+        "job 2": true,
+        "env 1": true,
+        "env 2": true,
+        "cluster 1": true,
+        "cluster 2": true
+       },
+       "renameByName": {
+        "instance 1": "node",
+        "listen_port 1": "port",
+        "Value #A": "days left",
+        "Value #B": "valid for name"
+       }
+      }
+     },
+     {
+      "id": "sortBy",
+      "options": {
+       "sort": [
+        {
+         "field": "days left",
+         "desc": false
+        }
+       ]
+      }
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "decimals": 1
+     },
+     "overrides": [
+      {
+       "matcher": {
+        "id": "byName",
+        "options": "days left"
+       },
+       "properties": [
+        {
+         "id": "thresholds",
+         "value": {
+          "mode": "absolute",
+          "steps": [
+           {
+            "color": "red",
+            "value": null
+           },
+           {
+            "color": "orange",
+            "value": 14
+           },
+           {
+            "color": "green",
+            "value": 30
+           }
+          ]
+         }
+        },
+        {
+         "id": "custom.cellOptions",
+         "value": {
+          "type": "color-background"
+         }
+        }
+       ]
+      },
+      {
+       "matcher": {
+        "id": "byName",
+        "options": "valid for name"
+       },
+       "properties": [
+        {
+         "id": "mappings",
+         "value": [
+          {
+           "type": "value",
+           "options": {
+            "1": {
+             "text": "yes",
+             "color": "green"
+            },
+            "0": {
+             "text": "WRONG CERT",
+             "color": "red"
+            }
+           }
+          }
+         ]
+        },
+        {
+         "id": "custom.cellOptions",
+         "value": {
+          "type": "color-background"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    "options": {}
    }
   ]
  },
