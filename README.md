@@ -38,7 +38,9 @@ Prometheus queries instead.
 | `prometheus-nginxlog-exporter` | ✓ | partial | ✗ | ✗ | ✗ | — | `log_format` |
 | keepalived exporters (`gen2brain`, `mehdy`, `cafebazaar`) | ✗ | ✗ | **self-report only** | partial | ✗ | some need `--enable-json` builds | — |
 | nginx Plus | ✓ | ✓ | ✗ | ✗ | ✗ | commercial licence | `status_zone` |
-| **nginx-fleet-exporter** | ✓ | ✓ | **✓ from the wire** | ✓ | ✓ | none | one additive drop-in file |
+| **nginx-fleet-exporter** | ✓ | ✓ | **✓ from the wire** | ✓ | ✓ | none | two additive drop-in files |
+
+> **Drop-in replacement:** with `--stub.scrape-uri` set, this exporter also emits the official exporter's exact metric names (`nginx_up`, `nginx_connections_*`, `nginx_http_requests_total`) from `stub_status` — existing dashboards and alerts written for `nginx-prometheus-exporter` keep working unchanged, and its separate process can be retired. Verified against the official "NGINX by nginxinc" Grafana dashboard.
 
 Two gaps in the existing landscape drove this project:
 
@@ -79,6 +81,8 @@ itself as a metric and leaves the rest serving:
 | `ingress` | `--ingress.access-log` | dedicated JSON access log (additive drop-in) | per-vhost and per-upstream traffic, failures, latency, idle clocks |
 | `vrrp` | `--vrrp` (auto-detect) | AF_PACKET capture of protocol-112 adverts | master per VRID, failover transitions, stepdown early-warning |
 | keepalived membership | automatic | local `keepalived.conf` | cluster membership incl. silent standbys, L2 segment identity |
+| stub | `--stub.scrape-uri` | nginx `stub_status` (additive drop-in) | official-exporter-compatible metrics + live connection-state gauges |
+| TLS probe | automatic | SNI handshake against the local listener | per-vhost cert expiry and SAN match — the cert *actually served*, per node; catches expiry, wrong-cert-served, and drift between HA pair members |
 
 Notable implementation details:
 
@@ -180,6 +184,7 @@ GOOS=linux GOARCH=amd64 go build -o nginx-fleet-exporter ./cmd/nginx-fleet-expor
 scp nginx-fleet-exporter          root@HOST:/usr/local/bin/
 scp deploy/nginx-fleet-exporter.service root@HOST:/etc/systemd/system/
 scp deploy/zz-fleet-logging.conf  root@HOST:/etc/nginx/conf.d/   # ingress log drop-in
+scp deploy/zz-stub-status.conf    root@HOST:/etc/nginx/conf.d/   # stub_status endpoint (access_log off — keeps self-monitoring out of attribution)
 scp deploy/fleet-logrotate        root@HOST:/etc/logrotate.d/nginx-fleet
 ssh root@HOST '
   useradd -r -s /usr/sbin/nologin nginx-exporter; usermod -aG adm nginx-exporter
@@ -207,6 +212,7 @@ declares its own `access_log` overrides the http-level one and won't appear in t
 | `--ingress.access-log` | *(empty = collector off)* | Path to the fleet JSON access log (see `deploy/zz-fleet-logging.conf`). The tailer starts at end-of-file (no double-count on restart), survives logrotate (inode change) and truncation, and retries if the file disappears. |
 | `--ingress.max-vhosts` | `500` | Distinct vhost label values before new ones fold into `_other`. Protects Prometheus from cardinality explosions via wildcard `server_name` + hostile SNI/Host values. |
 | `--ingress.state-file` | `/var/lib/nginx-fleet-exporter/state.json` | Persistence for the last-traffic idle clocks (periodic + shutdown save, atomic write). Empty disables. The systemd unit provides the directory via `StateDirectory=`. |
+| `--stub.scrape-uri` | *(empty = off)* | nginx `stub_status` URL. Emits official-exporter-compatible metrics; pairs with `deploy/zz-stub-status.conf`. Note: this is the one collector doing I/O on the scrape path (a loopback GET, ~10 ms) — connection gauges are instantaneous values. |
 | `--decommission-window` | `120h` | Idle window after which a vhost/upstream is a decommission candidate. Informational: exported as `nginx_fleet_decommission_window_seconds` and consumed by the alert rules, so the threshold lives in exactly one place. |
 
 ## Metrics reference
@@ -255,11 +261,37 @@ declares its own `access_log` overrides the http-level one and won't appear in t
 | `nginx_fleet_ingress_unattributed_total` | reason | lines that couldn't be attributed (`parse_fail`, `no_host`) — silent mis-attribution is worse than no attribution |
 | `nginx_fleet_upstream_requests_total` | vhost, upstream_addr | requests per upstream member, **including retried attempts** — a member hammered by `proxy_next_upstream` retries shows its true received load |
 | `nginx_fleet_upstream_failures_total` | vhost, upstream_addr, reason | empirical failures: `next_upstream` (skipped mid-request), `http_502/503/504`, per member |
-| `nginx_fleet_upstream_response_seconds_sum` | vhost, upstream_addr | sum of `$upstream_response_time` (divide by requests for the mean) |
+| `nginx_fleet_upstream_response_seconds` | vhost, upstream_addr | **histogram** of `$upstream_response_time` (default buckets) — per-member percentiles via `histogram_quantile()` |
 | `nginx_fleet_upstream_up` | vhost, upstream_addr | 1 if the most recent evidence for the member is a success; a later success flips a down member back up |
 | `nginx_fleet_vhost_last_traffic_timestamp_seconds` | vhost | idle clock per vhost |
 | `nginx_fleet_upstream_last_traffic_timestamp_seconds` | vhost, upstream_addr | idle clock per member; configured-but-never-used entries are seeded with "watching since", never-observed entries that leave the config are pruned |
 | `nginx_fleet_decommission_window_seconds` | — | the configured `--decommission-window`, for rules to reference |
+
+</details>
+
+<details>
+<summary><b>TLS certificates (probe)</b></summary>
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `nginx_fleet_vhost_cert_expiry_timestamp_seconds` | vhost, listen_port | NotAfter of the cert actually served (probed hourly via SNI) |
+| `nginx_fleet_vhost_cert_san_match` | vhost, listen_port | 0 = the vhost serves a certificate not valid for its own name |
+| `nginx_fleet_vhost_cert_probe_failed` | vhost, listen_port | TLS handshake failed entirely |
+
+Because every node probes its own listener, the same vhost appearing with
+different expiry values across nodes is **certificate drift between pair
+members** — invisible to clients until a failover swaps which cert they get.
+(This probe found exactly that, first hour deployed: a standby serving a cert
+expired five months earlier.)
+
+</details>
+
+<details>
+<summary><b>Official-exporter compatibility (stub collector)</b></summary>
+
+`nginx_up`, `nginx_connections_{accepted,handled,active,reading,writing,waiting}`,
+`nginx_http_requests_total` — same names and semantics as
+`nginx-prometheus-exporter`, sourced from `stub_status`.
 
 </details>
 
@@ -282,6 +314,15 @@ declares its own `access_log` overrides the http-level one and won't appear in t
 - **Intent-vs-actual drift** — configured members receiving no traffic while their vhost
   serves; traffic flowing to addresses no configured member resolves to.
 - **VRRP split brain** — two masters on one VRID.
+- **No healthy standby** (critical) — a cluster has fewer than 2 members with a
+  running nginx: a failover now would blackhole the VIP. Catches the classic
+  silent state after a boot-time failure on the standby.
+- **TLS**: cert expiring within 14 days, vhost serving a cert not valid for its
+  own name, and **cert drift** — pair members serving different certificates
+  for the same vhost.
+
+Evaluate them with vmalert + Alertmanager (or Prometheus). Rule changes ship
+with `deploy/deploy-rules.sh <user@vmalert-host>`.
 
 Cluster-level queries at fleet scale:
 
