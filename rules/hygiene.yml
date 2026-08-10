@@ -107,3 +107,34 @@ groups:
           summary: >-
             {{ $labels.vhost }}:{{ $labels.listen_port }} serves a certificate
             that is not valid for its own name (SNI/config bug).
+
+      # A cluster member counts as healthy only if its exporter reports live
+      # nginx workers. Fires when a pair is silently running without a
+      # standby — the state both reboot incidents left behind.
+      - alert: NginxClusterNoHealthyStandby
+        expr: |
+          count by (segment, vrid) (
+            max by (segment, vrid, instance) (nginx_fleet_cluster_info)
+            and on (instance) max by (instance) (nginx_fleet_worker_fds_open)
+          ) < 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            Cluster vrid {{ $labels.vrid }} has fewer than 2 members with a
+            running nginx — a failover now would blackhole its VIP.
+
+      # Pair members serving different certificates for the same vhost:
+      # invisible to clients until a failover swaps which cert they get.
+      - alert: NginxVhostCertDrift
+        expr: |
+          (max by (vhost, listen_port) (nginx_fleet_vhost_cert_expiry_timestamp_seconds)
+           - min by (vhost, listen_port) (nginx_fleet_vhost_cert_expiry_timestamp_seconds)) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            {{ $labels.vhost }}:{{ $labels.listen_port }} serves different
+            certificates depending on which pair member is active.
