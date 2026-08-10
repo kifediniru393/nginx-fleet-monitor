@@ -74,11 +74,25 @@ func (c *TLSProbeCollector) probeAll() {
 	if cfg == nil {
 		return
 	}
+	local := localIPv4s()
 	fresh := map[probeKey]probeResult{}
 	for _, s := range cfg.Servers {
 		for _, l := range s.Listens {
 			if !l.TLS {
 				continue
+			}
+			// Listeners bound to a specific address (commonly the VIP) are not
+			// reachable on loopback; dial the configured address — but only if
+			// this node currently holds it. Dialing a VIP from the standby
+			// would traverse the network to the master and report the
+			// *master's* certificate under this node's identity, silently
+			// defeating drift detection. Not held -> skip, no series.
+			addr := "127.0.0.1"
+			if l.Addr != "" && l.Addr != "0.0.0.0" && l.Addr != "[::]" && l.Addr != "*" {
+				if !local[l.Addr] {
+					continue
+				}
+				addr = l.Addr
 			}
 			for _, name := range s.Names {
 				// SNI needs a literal DNS name: skip catch-alls and wildcards.
@@ -89,13 +103,29 @@ func (c *TLSProbeCollector) probeAll() {
 				if _, done := fresh[key]; done {
 					continue
 				}
-				fresh[key] = probeOne("127.0.0.1:"+l.Port, name)
+				fresh[key] = probeOne(net.JoinHostPort(addr, l.Port), name)
 			}
 		}
 	}
 	c.mu.Lock()
 	c.results = fresh
 	c.mu.Unlock()
+}
+
+// localIPv4s returns the IPv4 addresses currently held by this node,
+// including VIPs while this node is master.
+func localIPv4s() map[string]bool {
+	out := map[string]bool{}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return out
+	}
+	for _, a := range addrs {
+		if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil {
+			out[ipn.IP.String()] = true
+		}
+	}
+	return out
 }
 
 // probeOne handshakes addr with serverName as SNI and inspects the leaf.

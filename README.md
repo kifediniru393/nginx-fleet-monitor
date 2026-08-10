@@ -281,6 +281,12 @@ declares its own `access_log` overrides the http-level one and won't appear in t
 Because every node probes its own listener, the same vhost appearing with
 different expiry values across nodes is **certificate drift between pair
 members** — invisible to clients until a failover swaps which cert they get.
+
+Listeners bound to a specific address (`listen <VIP>:443`) are probed at that
+address, but **only while this node holds it** — on the standby the VIP isn't
+local, and dialing it would reach the master's certificate and mislabel it, so
+those probes are skipped rather than mis-reported. Consequence: for VIP-bound
+listeners, cert series exist only on the current master.
 (This probe found exactly that, first hour deployed: a standby serving a cert
 expired five months earlier.)
 
