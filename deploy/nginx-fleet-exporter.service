@@ -3,7 +3,7 @@ Description=nginx fleet exporter
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/nginx-fleet-exporter --vrrp=auto --ingress.access-log=/var/log/nginx/fleet.log
+ExecStart=/usr/local/bin/nginx-fleet-exporter --vrrp=auto --ingress.access-log=/var/log/nginx/fleet.log --stub.scrape-uri=http://127.0.0.1:8081/stub_status
 # Writable exception to ProtectSystem=strict for the idle-clock state file.
 StateDirectory=nginx-fleet-exporter
 Restart=on-failure
