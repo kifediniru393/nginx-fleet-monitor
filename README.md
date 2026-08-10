@@ -178,7 +178,10 @@ nginx is warm and ready *before* the VIP arrives.
 ## Quick start
 
 ```sh
-GOOS=linux GOARCH=amd64 go build -o nginx-fleet-exporter ./cmd/nginx-fleet-exporter
+# CGO_ENABLED=0 is required: it produces a fully static binary that runs on
+# any glibc version. A native Linux build without it links the build host's
+# glibc and fails on older targets with "GLIBC_X.YY not found".
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o nginx-fleet-exporter ./cmd/nginx-fleet-exporter
 
 # per host — every step is additive; no existing config file is edited
 scp nginx-fleet-exporter          root@HOST:/usr/local/bin/
