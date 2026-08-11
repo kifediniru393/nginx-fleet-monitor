@@ -178,9 +178,16 @@ nginx is warm and ready *before* the VIP arrives.
 ## Quick start
 
 ```sh
-# CGO_ENABLED=0 is required: it produces a fully static binary that runs on
-# any glibc version. A native Linux build without it links the build host's
-# glibc and fails on older targets with "GLIBC_X.YY not found".
+# Preferred: a stamped static binary from GitHub Releases (amd64/arm64).
+# `nginx-fleet-exporter --version` then identifies exactly what is deployed.
+curl -sLO https://github.com/kifediniru393/nginx-fleet-monitor/releases/latest/download/nginx-fleet-exporter_0.2.0_linux_amd64.tar.gz
+tar xzf nginx-fleet-exporter_0.2.0_linux_amd64.tar.gz nginx-fleet-exporter
+
+# Or build from source. CGO_ENABLED=0 is required: it produces a fully static
+# binary that runs on any glibc version. A native Linux build without it links
+# the build host's glibc and fails on older targets with "GLIBC_X.YY not found".
+# Source builds report `--version` as dev/unknown unless you stamp them:
+#   -ldflags "-X main.version=... -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date +%F)"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o nginx-fleet-exporter ./cmd/nginx-fleet-exporter
 
 # per host — every step is additive; no existing config file is edited
@@ -217,6 +224,7 @@ declares its own `access_log` overrides the http-level one and won't appear in t
 | `--ingress.state-file` | `/var/lib/nginx-fleet-exporter/state.json` | Persistence for the last-traffic idle clocks (periodic + shutdown save, atomic write). Empty disables. The systemd unit provides the directory via `StateDirectory=`. |
 | `--stub.scrape-uri` | *(empty = off)* | nginx `stub_status` URL. Emits official-exporter-compatible metrics; pairs with `deploy/zz-stub-status.conf`. Note: this is the one collector doing I/O on the scrape path (a loopback GET, ~10 ms) — connection gauges are instantaneous values. |
 | `--decommission-window` | `120h` | Idle window after which a vhost/upstream is a decommission candidate. Informational: exported as `nginx_fleet_decommission_window_seconds` and consumed by the alert rules, so the threshold lives in exactly one place. |
+| `--version` | | Print version, commit, build date, and Go version, then exit. The same metadata is served while running as `nginx_fleet_build_info` (labels: `version`, `commit`, `date`, `goversion`) — one query shows version skew across a fleet. Release artifacts are stamped by goreleaser; a plain `go build` reports `dev`/`unknown`. |
 
 ## Metrics reference
 
@@ -265,7 +273,9 @@ declares its own `access_log` overrides the http-level one and won't appear in t
 | `nginx_fleet_upstream_requests_total` | vhost, upstream_addr | requests per upstream member, **including retried attempts** — a member hammered by `proxy_next_upstream` retries shows its true received load |
 | `nginx_fleet_upstream_failures_total` | vhost, upstream_addr, reason | empirical failures: `next_upstream` (skipped mid-request), `http_502/503/504`, per member |
 | `nginx_fleet_upstream_response_seconds` | vhost, upstream_addr | **histogram** of `$upstream_response_time` (default buckets) — per-member percentiles via `histogram_quantile()` |
-| `nginx_fleet_upstream_up` | vhost, upstream_addr | 1 if the most recent evidence for the member is a success; a later success flips a down member back up |
+| `nginx_fleet_upstream_up` | vhost, upstream_addr | 1 if the most recent evidence for the member is a success; a later success flips a down member back up. Evidence-based, not a probe: with no recent traffic the verdict is stale — gate alerts on the timestamps below |
+| `nginx_fleet_upstream_last_ok_timestamp_seconds` | vhost, upstream_addr | Unix time of the last observed success; `time()` minus this is the age of an up verdict. Absent until a success is seen — **no evidence is not the same as healthy** |
+| `nginx_fleet_upstream_last_fail_timestamp_seconds` | vhost, upstream_addr | Unix time of the last observed failure; absent until a failure is seen |
 | `nginx_fleet_vhost_last_traffic_timestamp_seconds` | vhost | idle clock per vhost |
 | `nginx_fleet_upstream_last_traffic_timestamp_seconds` | vhost, upstream_addr | idle clock per member; configured-but-never-used entries are seeded with "watching since", never-observed entries that leave the config are pruned |
 | `nginx_fleet_decommission_window_seconds` | — | the configured `--decommission-window`, for rules to reference |
