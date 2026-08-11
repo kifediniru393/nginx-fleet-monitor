@@ -214,11 +214,13 @@ func Tail(ctx context.Context, path string, s *Stats) error {
 	var f *os.File
 	var reader *bufio.Reader
 	var size int64
+	var partial string // unterminated tail of the last read, completed on a later tick
 
 	open := func(seekEnd bool) error {
 		if f != nil {
 			f.Close()
 		}
+		partial = "" // a reopened file starts at a line boundary; a stale fragment would corrupt its first line
 		var err error
 		f, err = os.Open(path)
 		if err != nil {
@@ -252,10 +254,14 @@ func Tail(ctx context.Context, path string, s *Stats) error {
 		}
 		for {
 			line, err := reader.ReadString('\n')
-			if line != "" && err == nil {
-				s.Ingest(strings.TrimRight(line, "\n"), time.Now())
+			if err == nil {
+				// A fragment held from a previous tick belongs to this line:
+				// dropping it would lose the request and misparse the rest.
+				s.Ingest(strings.TrimRight(partial+line, "\n"), time.Now())
+				partial = ""
 				continue
 			}
+			partial += line // EOF mid-line: hold until the writer finishes it
 			break
 		}
 		// Rotation (new inode) or truncation (shrunk file): reopen from start.

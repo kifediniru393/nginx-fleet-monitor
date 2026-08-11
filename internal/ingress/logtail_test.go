@@ -1,6 +1,8 @@
 package ingress
 
 import (
+	"context"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -138,5 +140,47 @@ func TestUpstreamLatencyHistogram(t *testing.T) {
 	// 0.004 -> le=0.005 (idx 0); 0.03 x2 -> le=0.05 (idx 3); 2.0 -> le=2.5 (idx 8); 60 -> +Inf (idx 11)
 	if h[0] != 1 || h[3] != 2 || h[8] != 1 || h[len(TimeBuckets)] != 1 {
 		t.Fatalf("buckets = %v", h)
+	}
+}
+
+func TestTailPartialLineAcrossWrites(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/fleet.log"
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := NewStats(100)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { Tail(ctx, path, s); close(done) }()
+	time.Sleep(1500 * time.Millisecond) // let the tailer reach EOF at the seek-end position
+
+	full := line("split.example.com", "10.0.0.9:80", 200, 10)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Write the line in two chunks with a tick between them: the first read
+	// hits EOF mid-line and must hold the fragment, not drop it.
+	if _, err := f.WriteString(full[:20]); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if _, err := f.WriteString(full[20:] + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	time.Sleep(1500 * time.Millisecond)
+	cancel()
+	<-done
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Unattributed["parse_fail"] != 0 {
+		t.Fatalf("split line misparsed: %v", s.Unattributed)
+	}
+	if s.Requests[vhostKey{"split.example.com"}]["2xx"] != 1 {
+		t.Fatalf("split line lost: %v", s.Requests)
 	}
 }
