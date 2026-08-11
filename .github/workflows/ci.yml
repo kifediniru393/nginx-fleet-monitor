@@ -13,7 +13,10 @@ jobs:
         with:
           go-version: "1.26"
       - run: go vet ./...
-      - run: go test ./...
+      # staticcheck omitted for now: current release cannot analyze go1.26 modules yet
+      - run: go test -race ./...
+      - name: Fuzz smoke (VRRP parser)
+        run: go test -fuzz=FuzzParse -fuzztime=20s ./internal/vrrp
       - name: Cross-compile
         run: |
           GOOS=linux GOARCH=amd64 go build ./cmd/nginx-fleet-exporter
