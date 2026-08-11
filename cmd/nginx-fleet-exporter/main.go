@@ -64,7 +64,7 @@ func main() {
 	var vrrpRunning atomic.Bool
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	cfgCollector.StartResolver(ctx)
+	cfgCollector.Start(ctx)
 	tlsProbe := collectors.NewTLSProbeCollector(cfgCollector)
 	tlsProbe.Start(ctx)
 	reg.MustRegister(tlsProbe)

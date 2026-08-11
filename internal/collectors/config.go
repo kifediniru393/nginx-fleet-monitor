@@ -44,7 +44,6 @@ type ConfigCollector struct {
 
 	mu       sync.Mutex
 	cfg      *nginxconf.Config
-	fetched  time.Time
 	failures float64
 }
 
@@ -52,9 +51,29 @@ func NewConfigCollector(cmd []string, fallbackPath string, interval time.Duratio
 	return &ConfigCollector{cmd: cmd, fallbackPath: fallbackPath, interval: interval, resolver: newResolverCache()}
 }
 
-// StartResolver begins the background DNS refresh of upstream hostnames.
-// Resolution never happens on the scrape path.
-func (c *ConfigCollector) StartResolver(ctx context.Context) {
+// Start begins the background config refresh and DNS resolution loops.
+// Neither `nginx -T` nor DNS lookups ever run on the scrape path: -T can
+// stall for seconds while nginx validates certificates, and a scrape must
+// never block on it. The first refresh is synchronous so collectors have a
+// topology as soon as the exporter is up.
+func (c *ConfigCollector) Start(ctx context.Context) {
+	c.mu.Lock()
+	c.refreshLocked()
+	c.mu.Unlock()
+	go func() {
+		t := time.NewTicker(c.interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			c.mu.Lock()
+			c.refreshLocked()
+			c.mu.Unlock()
+		}
+	}()
 	go func() {
 		for {
 			if cfg := c.Config(); cfg != nil {
@@ -84,15 +103,10 @@ func (c *ConfigCollector) ResolveBackend(addr string) string {
 func (c *ConfigCollector) Config() *nginxconf.Config {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.refreshLocked()
 	return c.cfg
 }
 
 func (c *ConfigCollector) refreshLocked() {
-	if time.Since(c.fetched) < c.interval && c.cfg != nil {
-		return
-	}
-	c.fetched = time.Now()
 	out, err := exec.Command(c.cmd[0], c.cmd[1:]...).Output()
 	text := string(out)
 	if err != nil {
@@ -118,7 +132,6 @@ func (c *ConfigCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (c *ConfigCollector) Collect(ch chan<- prometheus.Metric) {
 	c.mu.Lock()
-	c.refreshLocked()
 	cfg, failures := c.cfg, c.failures
 	c.mu.Unlock()
 
