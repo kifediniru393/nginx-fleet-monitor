@@ -74,6 +74,36 @@ groups:
             vhost {{ $labels.vhost }} sends traffic to
             {{ $labels.upstream_addr }}, which no configured upstream resolves to.
 
+      # A dead log tailer freezes traffic/upstream/idle metrics while every
+      # other collector keeps serving - partial failure that reads as calm.
+      # Seen live: fleet.log unreadable by the exporter user for days,
+      # unnoticed because only ingress_enabled dropped to 0.
+      - alert: NginxIngressCollectorDown
+        expr: nginx_fleet_ingress_enabled == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            Ingress (log-tailing) collector on {{ $labels.instance }} is not
+            running - traffic and upstream-health metrics are frozen. Check the
+            exporter journal; usual cause is an unreadable access log.
+
+      # Failure evidence must be FRESH: upstream_up == 0 alone can be a stale
+      # verdict on a member that has simply had no traffic since it failed.
+      - alert: NginxUpstreamFailing
+        expr: |
+          max by (vhost, upstream_addr) (nginx_fleet_upstream_up) == 0
+          and (time() - max by (vhost, upstream_addr)
+                 (nginx_fleet_upstream_last_fail_timestamp_seconds)) < 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            Upstream {{ $labels.upstream_addr }} (vhost {{ $labels.vhost }})
+            is failing: latest evidence is a failure observed within 15m.
+
       - alert: NginxVRRPSplitBrain
         expr: |
           count by (vrid) (

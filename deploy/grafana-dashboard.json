@@ -286,7 +286,7 @@
        "type": "prometheus",
        "uid": "bfum9nnilgflsf"
       },
-      "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up) == 0) or vector(0)",
+      "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds)) < 900) or vector(0)",
       "legendFormat": "members",
       "instant": true,
       "refId": "A"
@@ -317,7 +317,7 @@
       "calc": "lastNotNull"
      }
     },
-    "description": "Upstream members whose most recent evidence is a failure (connect error, 502-504, or skipped via proxy_next_upstream retry)."
+    "description": "Upstream members whose most recent evidence is a failure seen within the last 15m. Members with only stale failure evidence are excluded; see last_ok/last_fail timestamps for evidence age."
    },
    {
     "id": 6,
@@ -1274,6 +1274,108 @@
       "calc": "lastNotNull"
      }
     }
+   },
+   {
+    "id": 20,
+    "title": "INGRESS TAILER",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 0,
+     "y": 60,
+     "w": 6,
+     "h": 5
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "min(nginx_fleet_ingress_enabled) or vector(0)",
+      "legendFormat": "enabled",
+      "instant": true,
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "red",
+         "value": null
+        },
+        {
+         "color": "green",
+         "value": 1
+        }
+       ]
+      }
+     },
+     "overrides": []
+    },
+    "options": {
+     "colorMode": "background",
+     "textMode": "value_and_name",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    },
+    "description": "0 means at least one exporter's log tailer is not running (e.g. fleet.log unreadable): traffic, upstream health, and idle metrics are silently frozen on that node."
+   },
+   {
+    "id": 21,
+    "title": "EXPORTER BUILD",
+    "type": "stat",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "bfum9nnilgflsf"
+    },
+    "gridPos": {
+     "x": 6,
+     "y": 60,
+     "w": 6,
+     "h": 5
+    },
+    "targets": [
+     {
+      "datasource": {
+       "type": "prometheus",
+       "uid": "bfum9nnilgflsf"
+      },
+      "expr": "max by (version, commit) (nginx_fleet_build_info)",
+      "legendFormat": "{{version}} ({{commit}})",
+      "instant": true,
+      "refId": "A"
+     }
+    ],
+    "fieldConfig": {
+     "defaults": {
+      "thresholds": {
+       "mode": "absolute",
+       "steps": [
+        {
+         "color": "green",
+         "value": null
+        }
+       ]
+      }
+     },
+     "overrides": []
+    },
+    "options": {
+     "colorMode": "background",
+     "textMode": "name",
+     "reduceOptions": {
+      "calc": "lastNotNull"
+     }
+    },
+    "description": "Running exporter build across the fleet. More than one row = version skew between pair members."
    }
   ]
  },
