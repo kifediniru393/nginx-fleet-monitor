@@ -277,7 +277,7 @@
    },
    {
     "id": 5,
-    "title": "UPSTREAMS DOWN",
+    "title": "UPSTREAMS DOWN (ALL VHOSTS)",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -326,7 +326,7 @@
       "calc": "lastNotNull"
      }
     },
-    "description": "Upstream members whose most recent evidence is a failure seen within the last 15m. Members with only stale failure evidence are excluded; see last_ok/last_fail timestamps for evidence age."
+    "description": "Fleet-wide count, NOT filtered by the vhost dropdown: members whose most recent evidence is a failure seen within the last 15m. Find the culprit via the upstream members table after switching the vhost variable, or query nginx_fleet_upstream_up == 0 directly."
    },
    {
     "id": 6,
