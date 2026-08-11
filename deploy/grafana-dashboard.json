@@ -86,7 +86,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "(label_replace(max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1, \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid, vip) max by (vrid, vip) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+      "expr": "(label_replace(max by (vrid, vip, node) (nginx_fleet_vrrp_master{instance=~\"$instance\"}) == 1, \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info{instance=~\"$instance\"})) and on (vrid, vip) max by (vrid, vip) (nginx_fleet_cluster_info{instance=~\"$instance\"} and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
       "legendFormat": "{{member_node}} ({{vip}})",
       "instant": true,
       "refId": "A"
@@ -135,7 +135,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open) or vector(0)",
+      "expr": "count(nginx_fleet_active{instance=~\"$instance\"} == 1 unless on (instance) nginx_fleet_worker_fds_open{instance=~\"$instance\"}) or vector(0)",
       "legendFormat": "master w/o nginx",
       "instant": true,
       "refId": "A"
@@ -188,7 +188,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master) == 1) > 1) or vector(0)",
+      "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master{instance=~\"$instance\"}) == 1) > 1) or vector(0)",
       "legendFormat": "vrids w/ 2 masters",
       "instant": true,
       "refId": "A"
@@ -240,7 +240,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total[5m]))",
+      "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\", status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\"}[5m]))",
       "legendFormat": "of all requests",
       "instant": true,
       "refId": "A"
@@ -277,7 +277,7 @@
    },
    {
     "id": 5,
-    "title": "UPSTREAMS DOWN (ALL VHOSTS)",
+    "title": "UPSTREAMS DOWN",
     "type": "stat",
     "datasource": {
      "type": "prometheus",
@@ -295,7 +295,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds)) < 900) or vector(0)",
+      "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up{vhost=~\"$vhost\"}) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds{vhost=~\"$vhost\"})) < 900) or vector(0)",
       "legendFormat": "members",
       "instant": true,
       "refId": "A"
@@ -326,7 +326,7 @@
       "calc": "lastNotNull"
      }
     },
-    "description": "Fleet-wide count, NOT filtered by the vhost dropdown: members whose most recent evidence is a failure seen within the last 15m. Find the culprit via the upstream members table after switching the vhost variable, or query nginx_fleet_upstream_up == 0 directly."
+    "description": "Members of the selected vhost whose most recent evidence is a failure seen within the last 15m. Scoped to the vhost dropdown like every other panel."
    },
    {
     "id": 6,
@@ -348,7 +348,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds)) > 432000) or vector(0)",
+      "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=~\"$vhost\"})) > 432000) or vector(0)",
       "legendFormat": "decommission",
       "instant": true,
       "refId": "A"
@@ -400,7 +400,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "count(up{job=\"nginx-fleet\"} == 0) or vector(0)",
+      "expr": "count(up{instance=~\"$instance\", job=\"nginx-fleet\"} == 0) or vector(0)",
       "legendFormat": "of fleet",
       "instant": true,
       "refId": "A"
@@ -456,7 +456,7 @@
       "refId": "A",
       "instant": true,
       "format": "table",
-      "expr": "(sum by (source, target) (label_replace(label_replace(sum by (vhost, instance) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"vip\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace(sum by (upstream_addr, instance) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vip\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")))"
+      "expr": "(sum by (source, target) (label_replace(label_replace(sum by (vhost, instance) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info{instance=~\"$instance\"}), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"vip\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace(sum by (upstream_addr, instance) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info{instance=~\"$instance\"}), \"source\", \"$1\", \"vip\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")))"
      }
     ],
     "fieldConfig": {
@@ -864,7 +864,7 @@
       },
       "refId": "A",
       "instant": true,
-      "expr": "(label_replace(max by (vrid, node) (nginx_fleet_vrrp_priority), \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+      "expr": "(label_replace(max by (vrid, node) (nginx_fleet_vrrp_priority{instance=~\"$instance\"}), \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info{instance=~\"$instance\"})) and on (vrid) max by (vrid) (nginx_fleet_cluster_info{instance=~\"$instance\"} and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
       "legendFormat": "{{member_node}} \u2014 vrid {{vrid}}, priority"
      }
     ],
@@ -1249,7 +1249,7 @@
       },
       "refId": "A",
       "instant": true,
-      "expr": "sum(max by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total{from_node!=\"\"}[$__range])) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=\"$vhost\"}))) or vector(0)",
+      "expr": "sum(max by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total{instance=~\"$instance\", from_node!=\"\"}[$__range])) and on (vrid) max by (vrid) (nginx_fleet_cluster_info{instance=~\"$instance\"} and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=\"$vhost\"}))) or vector(0)",
       "legendFormat": "in time range"
      }
     ],
@@ -1304,7 +1304,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "min(nginx_fleet_ingress_enabled) or vector(0)",
+      "expr": "min(nginx_fleet_ingress_enabled{instance=~\"$instance\"}) or vector(0)",
       "legendFormat": "enabled",
       "instant": true,
       "refId": "A"
@@ -1357,7 +1357,7 @@
        "type": "prometheus",
        "uid": "${datasource}"
       },
-      "expr": "max by (version, commit) (nginx_fleet_build_info)",
+      "expr": "max by (version, commit) (nginx_fleet_build_info{instance=~\"$instance\"})",
       "legendFormat": "{{version}} ({{commit}})",
       "instant": true,
       "refId": "A"
