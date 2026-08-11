@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -26,12 +27,38 @@ import (
 	"github.com/techmoose/nginx-fleet-exporter/internal/vrrp"
 )
 
-// Populated by goreleaser via -ldflags at release build time.
+// Populated by goreleaser via -ldflags at release build time. Unstamped
+// builds fall back to the VCS metadata Go embeds in every binary built
+// inside a git checkout, so a plain `go build` still knows its commit.
 var (
 	version = "dev"
 	commit  = "unknown"
 	date    = "unknown"
 )
+
+func init() {
+	if commit != "unknown" {
+		return
+	}
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	for _, s := range bi.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			if len(s.Value) >= 7 {
+				commit = s.Value[:7]
+			}
+		case "vcs.time":
+			date = s.Value
+		case "vcs.modified":
+			if s.Value == "true" {
+				defer func() { commit += "-dirty" }()
+			}
+		}
+	}
+}
 
 func main() {
 	listenAddr := flag.String("web.listen-address", ":9942", "address for /metrics")
