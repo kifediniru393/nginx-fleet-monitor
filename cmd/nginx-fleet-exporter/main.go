@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -22,6 +23,13 @@ import (
 	"github.com/techmoose/nginx-fleet-exporter/internal/ingress"
 	"github.com/techmoose/nginx-fleet-exporter/internal/keepalived"
 	"github.com/techmoose/nginx-fleet-exporter/internal/vrrp"
+)
+
+// Populated by goreleaser via -ldflags at release build time.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
 )
 
 func main() {
@@ -45,6 +53,17 @@ func main() {
 
 	reg := prometheus.NewPedanticRegistry()
 	reg.MustRegister(prometheus.NewGoCollector())
+
+	buildInfo := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "nginx_fleet_build_info",
+		Help: "Build metadata of the running exporter; value is always 1.",
+		ConstLabels: prometheus.Labels{
+			"version": version, "commit": commit, "date": date,
+			"goversion": runtime.Version(),
+		},
+	})
+	buildInfo.Set(1)
+	reg.MustRegister(buildInfo)
 
 	cfgCollector := collectors.NewConfigCollector(strings.Fields(*nginxTCmd), *nginxConf, *configInterval)
 	reg.MustRegister(cfgCollector)

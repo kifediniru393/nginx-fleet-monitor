@@ -34,7 +34,7 @@ type probeResult struct {
 
 var (
 	certExpiryDesc = prometheus.NewDesc("nginx_fleet_vhost_cert_expiry_timestamp_seconds",
-		"NotAfter of the certificate actually served for the vhost (probed via SNI against the local listener).",
+		"Earliest NotAfter across the certificate chain actually served for the vhost (probed via SNI against the local listener).",
 		[]string{"vhost", "listen_port"}, nil)
 	certSanMatchDesc = prometheus.NewDesc("nginx_fleet_vhost_cert_san_match",
 		"1 if the served certificate is valid for the vhost name — 0 means the wrong cert is being served (SNI/config bug).",
@@ -144,8 +144,16 @@ func probeOne(addr, serverName string) probeResult {
 		return probeResult{}
 	}
 	leaf := certs[0]
+	// Earliest NotAfter across the served chain: an expired intermediate
+	// breaks clients just as hard as an expired leaf.
+	expiry := leaf.NotAfter
+	for _, c := range certs[1:] {
+		if c.NotAfter.Before(expiry) {
+			expiry = c.NotAfter
+		}
+	}
 	return probeResult{
-		expiry:   leaf.NotAfter,
+		expiry:   expiry,
 		sanMatch: leaf.VerifyHostname(serverName) == nil,
 		ok:       true,
 	}
