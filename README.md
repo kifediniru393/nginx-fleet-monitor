@@ -355,9 +355,19 @@ count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open) 
 
 ## Grafana dashboard
 
-`deploy/grafana-dashboard.json` — import via UI or API, then pick your Prometheus
+`deploy/grafana-dashboard.json` — the bare dashboard object, so the UI importer
+takes it directly: Dashboards > New > Import > upload, then pick your Prometheus
 data source from the dashboard's "data source" dropdown (no JSON editing needed;
-every panel resolves through the `$datasource` variable). Three tiers:
+every panel resolves through the `$datasource` variable). Via API, wrap it:
+
+```sh
+jq '{dashboard: ., overwrite: true}' deploy/grafana-dashboard.json | \
+  curl -sX POST http://<grafana>:3000/api/dashboards/db \
+    -H "Authorization: Bearer <service-account-token>" \
+    -H "Content-Type: application/json" -d @-
+```
+
+Three tiers:
 
 - **NOC wall**: VIP holder (hostname + address), current master with live priority,
   split-brain / blackhole / idle-config alarms readable across a room.

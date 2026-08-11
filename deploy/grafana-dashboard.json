@@ -1,1095 +1,1091 @@
 {
- "dashboard": {
-  "uid": "nginx-fleet",
-  "title": "nginx Fleet \u2014 Operations",
-  "tags": [
-   "nginx",
-   "keepalived",
-   "noc"
-  ],
-  "timezone": "browser",
-  "schemaVersion": 39,
-  "refresh": "10s",
-  "time": {
-   "from": "now-3h",
-   "to": "now"
-  },
-  "templating": {
-   "list": [
-    {
-     "name": "datasource",
-     "label": "data source",
-     "type": "datasource",
-     "query": "prometheus",
-     "refresh": 1,
-     "current": {},
-     "hide": 0
-    },
-    {
-     "name": "instance",
-     "label": "nginx instance",
-     "type": "query",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "${datasource}"
-     },
-     "refresh": 2,
-     "query": {
-      "query": "label_values(nginx_fleet_vhost_info, instance)",
-      "refId": "vi"
-     },
-     "includeAll": false,
-     "multi": false,
-     "current": {},
-     "sort": 1
-    },
-    {
-     "name": "vhost",
-     "type": "query",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "${datasource}"
-     },
-     "refresh": 2,
-     "query": {
-      "query": "label_values(nginx_fleet_vhost_info{instance=\"$instance\"}, vhost)",
-      "refId": "var"
-     },
-     "includeAll": false,
-     "multi": false,
-     "current": {},
-     "regex": "/^(?!_$)(?![0-9.]+$).*/"
-    }
-   ]
-  },
-  "annotations": {
-   "list": []
-  },
-  "panels": [
+ "uid": "nginx-fleet",
+ "title": "nginx Fleet \u2014 Operations",
+ "tags": [
+  "nginx",
+  "keepalived",
+  "noc"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "refresh": "10s",
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "templating": {
+  "list": [
    {
-    "id": 1,
-    "title": "$vhost \u2014 VIP HOLDER",
-    "type": "stat",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 0,
-     "w": 6,
-     "h": 5
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "(label_replace(max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1, \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid, vip) max by (vrid, vip) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
-      "legendFormat": "{{member_node}} ({{vip}})",
-      "instant": true,
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "blue",
-         "value": null
-        }
-       ]
-      }
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    },
-    "description": "The node currently holding the VIP that serves the selected vhost. Exactly one entry when healthy; two entries for the same vrid = split brain."
+    "name": "datasource",
+    "label": "data source",
+    "type": "datasource",
+    "query": "prometheus",
+    "refresh": 1,
+    "current": {},
+    "hide": 0
    },
    {
-    "id": 2,
-    "title": "BLACKHOLE",
-    "type": "stat",
+    "name": "instance",
+    "label": "nginx instance",
+    "type": "query",
     "datasource": {
      "type": "prometheus",
      "uid": "${datasource}"
     },
-    "gridPos": {
-     "x": 0,
-     "y": 40,
-     "w": 6,
-     "h": 5
+    "refresh": 2,
+    "query": {
+     "query": "label_values(nginx_fleet_vhost_info, instance)",
+     "refId": "vi"
     },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "count(nginx_fleet_active{instance=~\"$instance\"} == 1 unless on (instance) nginx_fleet_worker_fds_open{instance=~\"$instance\"}) or vector(0)",
-      "legendFormat": "master w/o nginx",
-      "instant": true,
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        },
-        {
-         "color": "red",
-         "value": 1
-        }
-       ]
-      }
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    },
-    "description": "Nodes that hold the VIP (VRRP master) but have zero nginx worker processes \u2014 traffic arrives and nothing serves it. This is the exact failure mode of the manual nginx-stop test. Anything above 0 is an outage."
+    "includeAll": false,
+    "multi": false,
+    "current": {},
+    "sort": 1
    },
    {
-    "id": 3,
-    "title": "SPLIT BRAIN",
-    "type": "stat",
+    "name": "vhost",
+    "type": "query",
     "datasource": {
      "type": "prometheus",
      "uid": "${datasource}"
     },
-    "gridPos": {
-     "x": 16,
-     "y": 0,
-     "w": 4,
-     "h": 5
+    "refresh": 2,
+    "query": {
+     "query": "label_values(nginx_fleet_vhost_info{instance=\"$instance\"}, vhost)",
+     "refId": "var"
     },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master{instance=~\"$instance\"}) == 1) > 1) or vector(0)",
-      "legendFormat": "vrids w/ 2 masters",
-      "instant": true,
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        },
-        {
-         "color": "red",
-         "value": 1
-        }
-       ]
-      }
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    }
-   },
-   {
-    "id": 4,
-    "title": "5XX RATE",
-    "type": "stat",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 6,
-     "y": 40,
-     "w": 6,
-     "h": 5
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\", status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\"}[5m]))",
-      "legendFormat": "of all requests",
-      "instant": true,
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        },
-        {
-         "color": "red",
-         "value": 5
-        }
-       ]
-      },
-      "unit": "percent",
-      "decimals": 1
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    },
-    "description": "Percentage of all requests (fleet-wide) returning 5xx. Goes red at 5%."
-   },
-   {
-    "id": 5,
-    "title": "UPSTREAMS DOWN",
-    "type": "stat",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 12,
-     "y": 40,
-     "w": 6,
-     "h": 5
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up{vhost=~\"$vhost\"}) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds{vhost=~\"$vhost\"})) < 900) or vector(0)",
-      "legendFormat": "members",
-      "instant": true,
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        },
-        {
-         "color": "red",
-         "value": 1
-        }
-       ]
-      }
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    },
-    "description": "Members of the selected vhost whose most recent evidence is a failure seen within the last 15m. Scoped to the vhost dropdown like every other panel."
-   },
-   {
-    "id": 6,
-    "title": "IDLE > 5 DAYS",
-    "type": "stat",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 20,
-     "y": 0,
-     "w": 4,
-     "h": 5
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=~\"$vhost\"})) > 432000) or vector(0)",
-      "legendFormat": "decommission",
-      "instant": true,
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        },
-        {
-         "color": "red",
-         "value": 1
-        }
-       ]
-      }
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    }
-   },
-   {
-    "id": 7,
-    "title": "EXPORTERS DOWN",
-    "type": "stat",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 18,
-     "y": 40,
-     "w": 6,
-     "h": 5
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "count(up{instance=~\"$instance\", job=\"nginx-fleet\"} == 0) or vector(0)",
-      "legendFormat": "of fleet",
-      "instant": true,
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        },
-        {
-         "color": "red",
-         "value": 1
-        }
-       ]
-      }
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    },
-    "description": "Fleet nodes whose nginx-fleet-exporter is not answering scrapes \u2014 monitoring blind spots, not necessarily service failures."
-   },
-   {
-    "id": 8,
-    "title": "$vhost \u2014 live topology: vhost \u2192 VIP \u2192 upstreams (req/s)",
-    "type": "nodeGraph",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 5,
-     "w": 24,
-     "h": 11
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "refId": "A",
-      "instant": true,
-      "format": "table",
-      "expr": "(sum by (source, target) (label_replace(label_replace(sum by (vhost, instance) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"vip\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace(sum by (upstream_addr, instance) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vip\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")))"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {},
-     "overrides": [
-      {
-       "matcher": {
-        "id": "byName",
-        "options": "mainstat"
-       },
-       "properties": [
-        {
-         "id": "displayName",
-         "value": "req/s"
-        },
-        {
-         "id": "unit",
-         "value": "reqps"
-        },
-        {
-         "id": "decimals",
-         "value": 2
-        }
-       ]
-      }
-     ]
-    },
-    "transformations": [
-     {
-      "id": "calculateField",
-      "options": {
-       "mode": "index",
-       "alias": "id"
-      }
-     },
-     {
-      "id": "organize",
-      "options": {
-       "excludeByName": {
-        "Time": true
-       },
-       "renameByName": {
-        "Value": "mainstat"
-       }
-      }
-     }
-    ],
-    "options": {
-     "edges": {
-      "mainStatUnit": "reqps"
-     },
-     "nodes": {}
-    },
-    "description": "Request flow for the selected vhost: clients resolve the vhost name to its cluster VIP, the VIP holder's nginx proxies to the upstream members. Edge numbers are req/s. Non-VIP deployments (no keepalived) show no VIP hop."
-   },
-   {
-    "id": 10,
-    "title": "$vhost \u2014 requests by status",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 25,
-     "w": 8,
-     "h": 8
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "sum by (status_class) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m]))",
-      "legendFormat": "{{status_class}}",
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "reqps",
-      "custom": {
-       "fillOpacity": 15,
-       "stacking": {
-        "mode": "normal"
-       }
-      }
-     },
-     "overrides": []
-    },
-    "repeat": "vhost",
-    "repeatDirection": "h",
-    "maxPerRow": 3
-   },
-   {
-    "id": 11,
-    "title": "$vhost \u2014 upstream members",
-    "type": "table",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 33,
-     "w": 12,
-     "h": 8
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "max by (upstream_addr) (nginx_fleet_upstream_up{vhost=\"$vhost\"})",
-      "legendFormat": "",
-      "instant": true,
-      "format": "table",
-      "refId": "A"
-     },
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
-      "legendFormat": "",
-      "instant": true,
-      "format": "table",
-      "refId": "B"
-     },
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "(time() - max by (upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=\"$vhost\"})) / 3600",
-      "legendFormat": "",
-      "instant": true,
-      "format": "table",
-      "refId": "C"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "decimals": 2
-     },
-     "overrides": [
-      {
-       "matcher": {
-        "id": "byName",
-        "options": "up"
-       },
-       "properties": [
-        {
-         "id": "mappings",
-         "value": [
-          {
-           "type": "value",
-           "options": {
-            "1": {
-             "text": "UP",
-             "color": "green"
-            },
-            "0": {
-             "text": "DOWN",
-             "color": "red"
-            }
-           }
-          }
-         ]
-        },
-        {
-         "id": "custom.cellOptions",
-         "value": {
-          "type": "color-background"
-         }
-        }
-       ]
-      },
-      {
-       "matcher": {
-        "id": "byName",
-        "options": "idle (h)"
-       },
-       "properties": [
-        {
-         "id": "thresholds",
-         "value": {
-          "mode": "absolute",
-          "steps": [
-           {
-            "color": "green",
-            "value": null
-           },
-           {
-            "color": "orange",
-            "value": 72
-           },
-           {
-            "color": "red",
-            "value": 120
-           }
-          ]
-         }
-        },
-        {
-         "id": "custom.cellOptions",
-         "value": {
-          "type": "color-background"
-         }
-        }
-       ]
-      }
-     ]
-    },
-    "transformations": [
-     {
-      "id": "joinByField",
-      "options": {
-       "byField": "upstream_addr",
-       "mode": "outer"
-      }
-     },
-     {
-      "id": "organize",
-      "options": {
-       "excludeByName": {
-        "Time 1": true,
-        "Time 2": true,
-        "Time 3": true
-       },
-       "renameByName": {
-        "Value #A": "up",
-        "Value #B": "req/s",
-        "Value #C": "idle (h)"
-       }
-      }
-     }
-    ]
-   },
-   {
-    "id": 12,
-    "title": "$vhost \u2014 upstream latency & failures",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 12,
-     "y": 33,
-     "w": 12,
-     "h": 8
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=\"$vhost\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
-      "legendFormat": "{{upstream_addr}} latency",
-      "refId": "A"
-     },
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "sum by (upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
-      "legendFormat": "{{upstream_addr}} {{reason}}",
-      "refId": "B"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "s"
-     },
-     "overrides": []
-    }
-   },
-   {
-    "id": 13,
-    "title": "$vhost \u2014 configured listeners & backends",
-    "type": "table",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 41,
-     "w": 24,
-     "h": 6
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "max by (listen_port, tls, upstream_addr, config_file) (nginx_fleet_vhost_info{vhost=\"$vhost\"})",
-      "legendFormat": "",
-      "instant": true,
-      "format": "table",
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {},
-     "overrides": []
-    },
-    "transformations": [
-     {
-      "id": "organize",
-      "options": {
-       "excludeByName": {
-        "Time": true,
-        "Value": true
-       }
-      }
-     }
-    ]
-   },
-   {
-    "id": 14,
-    "title": "$vhost \u2014 KEEPALIVED MASTER",
-    "type": "stat",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 6,
-     "y": 0,
-     "w": 6,
-     "h": 5
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "refId": "A",
-      "instant": true,
-      "expr": "(label_replace(max by (vrid, node) (nginx_fleet_vrrp_priority), \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
-      "legendFormat": "{{member_node}} \u2014 vrid {{vrid}}, priority"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        }
-       ]
-      }
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    },
-    "description": "Master of the selected vhost's cluster, with its live advertised priority. A drop (e.g. 150\u219290) means the nginx health check demoted it."
-   },
-   {
-    "id": 16,
-    "title": "$vhost \u2014 upstream load over time",
-    "type": "timeseries",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 16,
-     "w": 24,
-     "h": 9
-    },
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
-      "legendFormat": "{{upstream_addr}}",
-      "refId": "A"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "unit": "reqps",
-      "custom": {
-       "fillOpacity": 25,
-       "stacking": {
-        "mode": "normal"
-       }
-      }
-     },
-     "overrides": []
-    },
-    "description": "Stacked request rate per member. The band widths are the load split; a member's band vanishing while others grow = traffic shifted off it (down, demoted, or drained)."
-   },
-   {
-    "id": 18,
-    "title": "$vhost \u2014 TLS certificate per node (rows disagreeing = drift between pair members)",
-    "type": "table",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 0,
-     "y": 47,
-     "w": 24,
-     "h": 7
-    },
-    "description": "Certificate actually served for each TLS vhost, probed via SNI on every node. Rows for the same vhost with different expiry = certificate drift between HA pair members \u2014 a failover would change what clients see. 'valid for name' 0 = wrong cert served entirely.",
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "refId": "A",
-      "instant": true,
-      "format": "table",
-      "expr": "(nginx_fleet_vhost_cert_expiry_timestamp_seconds{vhost=\"$vhost\"} - time()) / 86400"
-     },
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "refId": "B",
-      "instant": true,
-      "format": "table",
-      "expr": "nginx_fleet_vhost_cert_san_match{vhost=\"$vhost\"}"
-     }
-    ],
-    "transformations": [
-     {
-      "id": "joinByField",
-      "options": {
-       "byField": "vhost",
-       "mode": "outer"
-      }
-     },
-     {
-      "id": "organize",
-      "options": {
-       "excludeByName": {
-        "Time 1": true,
-        "Time 2": true,
-        "listen_port 2": true,
-        "instance 2": true,
-        "job 1": true,
-        "job 2": true,
-        "env 1": true,
-        "env 2": true,
-        "cluster 1": true,
-        "cluster 2": true
-       },
-       "renameByName": {
-        "instance 1": "node",
-        "listen_port 1": "port",
-        "Value #A": "days left",
-        "Value #B": "valid for name"
-       }
-      }
-     },
-     {
-      "id": "sortBy",
-      "options": {
-       "sort": [
-        {
-         "field": "days left",
-         "desc": false
-        }
-       ]
-      }
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "decimals": 1,
-      "noValue": "no TLS listeners configured for this vhost"
-     },
-     "overrides": [
-      {
-       "matcher": {
-        "id": "byName",
-        "options": "days left"
-       },
-       "properties": [
-        {
-         "id": "thresholds",
-         "value": {
-          "mode": "absolute",
-          "steps": [
-           {
-            "color": "red",
-            "value": null
-           },
-           {
-            "color": "orange",
-            "value": 14
-           },
-           {
-            "color": "green",
-            "value": 30
-           }
-          ]
-         }
-        },
-        {
-         "id": "custom.cellOptions",
-         "value": {
-          "type": "color-background"
-         }
-        }
-       ]
-      },
-      {
-       "matcher": {
-        "id": "byName",
-        "options": "valid for name"
-       },
-       "properties": [
-        {
-         "id": "mappings",
-         "value": [
-          {
-           "type": "value",
-           "options": {
-            "1": {
-             "text": "yes",
-             "color": "green"
-            },
-            "0": {
-             "text": "WRONG CERT",
-             "color": "red"
-            }
-           }
-          }
-         ]
-        },
-        {
-         "id": "custom.cellOptions",
-         "value": {
-          "type": "color-background"
-         }
-        }
-       ]
-      }
-     ]
-    },
-    "options": {
-     "cellHeight": "sm"
-    }
-   },
-   {
-    "id": 19,
-    "title": "$vhost \u2014 VIP MOVES",
-    "type": "stat",
-    "datasource": {
-     "type": "prometheus",
-     "uid": "${datasource}"
-    },
-    "gridPos": {
-     "x": 12,
-     "y": 0,
-     "w": 4,
-     "h": 5
-    },
-    "description": "How many times this vhost's serving role moved between the two nginx instances of its cluster, within the dashboard time range (failovers + failbacks, counted once each, observer-deduplicated). Exporter restarts can slightly inflate this via counter resets.",
-    "targets": [
-     {
-      "datasource": {
-       "type": "prometheus",
-       "uid": "${datasource}"
-      },
-      "refId": "A",
-      "instant": true,
-      "expr": "sum(max by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total{from_node!=\"\"}[$__range])) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=\"$vhost\"}))) or vector(0)",
-      "legendFormat": "in time range"
-     }
-    ],
-    "fieldConfig": {
-     "defaults": {
-      "thresholds": {
-       "mode": "absolute",
-       "steps": [
-        {
-         "color": "green",
-         "value": null
-        },
-        {
-         "color": "orange",
-         "value": 3
-        },
-        {
-         "color": "red",
-         "value": 6
-        }
-       ]
-      },
-      "decimals": 0
-     },
-     "overrides": []
-    },
-    "options": {
-     "colorMode": "background",
-     "textMode": "value_and_name",
-     "reduceOptions": {
-      "calc": "lastNotNull"
-     }
-    }
+    "includeAll": false,
+    "multi": false,
+    "current": {},
+    "regex": "/^(?!_$)(?![0-9.]+$).*/"
    }
   ]
  },
- "overwrite": true,
- "message": "upstream load row scoped to selected vhost"
+ "annotations": {
+  "list": []
+ },
+ "panels": [
+  {
+   "id": 1,
+   "title": "$vhost \u2014 VIP HOLDER",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "(label_replace(max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1, \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid, vip) max by (vrid, vip) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+     "legendFormat": "{{member_node}} ({{vip}})",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   },
+   "description": "The node currently holding the VIP that serves the selected vhost. Exactly one entry when healthy; two entries for the same vrid = split brain."
+  },
+  {
+   "id": 2,
+   "title": "BLACKHOLE",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 40,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "count(nginx_fleet_active{instance=~\"$instance\"} == 1 unless on (instance) nginx_fleet_worker_fds_open{instance=~\"$instance\"}) or vector(0)",
+     "legendFormat": "master w/o nginx",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   },
+   "description": "Nodes that hold the VIP (VRRP master) but have zero nginx worker processes \u2014 traffic arrives and nothing serves it. This is the exact failure mode of the manual nginx-stop test. Anything above 0 is an outage."
+  },
+  {
+   "id": 3,
+   "title": "SPLIT BRAIN",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 4,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master{instance=~\"$instance\"}) == 1) > 1) or vector(0)",
+     "legendFormat": "vrids w/ 2 masters",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   }
+  },
+  {
+   "id": 4,
+   "title": "5XX RATE",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 40,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\", status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\"}[5m]))",
+     "legendFormat": "of all requests",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 5
+       }
+      ]
+     },
+     "unit": "percent",
+     "decimals": 1
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   },
+   "description": "Percentage of all requests (fleet-wide) returning 5xx. Goes red at 5%."
+  },
+  {
+   "id": 5,
+   "title": "UPSTREAMS DOWN",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 40,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up{vhost=~\"$vhost\"}) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds{vhost=~\"$vhost\"})) < 900) or vector(0)",
+     "legendFormat": "members",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   },
+   "description": "Members of the selected vhost whose most recent evidence is a failure seen within the last 15m. Scoped to the vhost dropdown like every other panel."
+  },
+  {
+   "id": 6,
+   "title": "IDLE > 5 DAYS",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 0,
+    "w": 4,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=~\"$vhost\"})) > 432000) or vector(0)",
+     "legendFormat": "decommission",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   }
+  },
+  {
+   "id": 7,
+   "title": "EXPORTERS DOWN",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 40,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "count(up{instance=~\"$instance\", job=\"nginx-fleet\"} == 0) or vector(0)",
+     "legendFormat": "of fleet",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   },
+   "description": "Fleet nodes whose nginx-fleet-exporter is not answering scrapes \u2014 monitoring blind spots, not necessarily service failures."
+  },
+  {
+   "id": 8,
+   "title": "$vhost \u2014 live topology: vhost \u2192 VIP \u2192 upstreams (req/s)",
+   "type": "nodeGraph",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 5,
+    "w": 24,
+    "h": 11
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "refId": "A",
+     "instant": true,
+     "format": "table",
+     "expr": "(sum by (source, target) (label_replace(label_replace(sum by (vhost, instance) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"vip\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace(sum by (upstream_addr, instance) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vip\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")))"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "mainstat"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "req/s"
+       },
+       {
+        "id": "unit",
+        "value": "reqps"
+       },
+       {
+        "id": "decimals",
+        "value": 2
+       }
+      ]
+     }
+    ]
+   },
+   "transformations": [
+    {
+     "id": "calculateField",
+     "options": {
+      "mode": "index",
+      "alias": "id"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value": "mainstat"
+      }
+     }
+    }
+   ],
+   "options": {
+    "edges": {
+     "mainStatUnit": "reqps"
+    },
+    "nodes": {}
+   },
+   "description": "Request flow for the selected vhost: clients resolve the vhost name to its cluster VIP, the VIP holder's nginx proxies to the upstream members. Edge numbers are req/s. Non-VIP deployments (no keepalived) show no VIP hop."
+  },
+  {
+   "id": 10,
+   "title": "$vhost \u2014 requests by status",
+   "type": "timeseries",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "sum by (status_class) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m]))",
+     "legendFormat": "{{status_class}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps",
+     "custom": {
+      "fillOpacity": 15,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "repeat": "vhost",
+   "repeatDirection": "h",
+   "maxPerRow": 3
+  },
+  {
+   "id": 11,
+   "title": "$vhost \u2014 upstream members",
+   "type": "table",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 33,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "max by (upstream_addr) (nginx_fleet_upstream_up{vhost=\"$vhost\"})",
+     "legendFormat": "",
+     "instant": true,
+     "format": "table",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+     "legendFormat": "",
+     "instant": true,
+     "format": "table",
+     "refId": "B"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "(time() - max by (upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=\"$vhost\"})) / 3600",
+     "legendFormat": "",
+     "instant": true,
+     "format": "table",
+     "refId": "C"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "decimals": 2
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "up"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "UP",
+            "color": "green"
+           },
+           "0": {
+            "text": "DOWN",
+            "color": "red"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-background"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "idle (h)"
+      },
+      "properties": [
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "color": "green",
+           "value": null
+          },
+          {
+           "color": "orange",
+           "value": 72
+          },
+          {
+           "color": "red",
+           "value": 120
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-background"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "upstream_addr",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time 1": true,
+       "Time 2": true,
+       "Time 3": true
+      },
+      "renameByName": {
+       "Value #A": "up",
+       "Value #B": "req/s",
+       "Value #C": "idle (h)"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "title": "$vhost \u2014 upstream latency & failures",
+   "type": "timeseries",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 33,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=\"$vhost\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+     "legendFormat": "{{upstream_addr}} latency",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "sum by (upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
+     "legendFormat": "{{upstream_addr}} {{reason}}",
+     "refId": "B"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 13,
+   "title": "$vhost \u2014 configured listeners & backends",
+   "type": "table",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 41,
+    "w": 24,
+    "h": 6
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "max by (listen_port, tls, upstream_addr, config_file) (nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+     "legendFormat": "",
+     "instant": true,
+     "format": "table",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "transformations": [
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "Value": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "title": "$vhost \u2014 KEEPALIVED MASTER",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 0,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "refId": "A",
+     "instant": true,
+     "expr": "(label_replace(max by (vrid, node) (nginx_fleet_vrrp_priority), \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+     "legendFormat": "{{member_node}} \u2014 vrid {{vrid}}, priority"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   },
+   "description": "Master of the selected vhost's cluster, with its live advertised priority. A drop (e.g. 150\u219290) means the nginx health check demoted it."
+  },
+  {
+   "id": 16,
+   "title": "$vhost \u2014 upstream load over time",
+   "type": "timeseries",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 24,
+    "h": 9
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+     "legendFormat": "{{upstream_addr}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps",
+     "custom": {
+      "fillOpacity": 25,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "description": "Stacked request rate per member. The band widths are the load split; a member's band vanishing while others grow = traffic shifted off it (down, demoted, or drained)."
+  },
+  {
+   "id": 18,
+   "title": "$vhost \u2014 TLS certificate per node (rows disagreeing = drift between pair members)",
+   "type": "table",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 47,
+    "w": 24,
+    "h": 7
+   },
+   "description": "Certificate actually served for each TLS vhost, probed via SNI on every node. Rows for the same vhost with different expiry = certificate drift between HA pair members \u2014 a failover would change what clients see. 'valid for name' 0 = wrong cert served entirely.",
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "refId": "A",
+     "instant": true,
+     "format": "table",
+     "expr": "(nginx_fleet_vhost_cert_expiry_timestamp_seconds{vhost=\"$vhost\"} - time()) / 86400"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "refId": "B",
+     "instant": true,
+     "format": "table",
+     "expr": "nginx_fleet_vhost_cert_san_match{vhost=\"$vhost\"}"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "vhost",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time 1": true,
+       "Time 2": true,
+       "listen_port 2": true,
+       "instance 2": true,
+       "job 1": true,
+       "job 2": true,
+       "env 1": true,
+       "env 2": true,
+       "cluster 1": true,
+       "cluster 2": true
+      },
+      "renameByName": {
+       "instance 1": "node",
+       "listen_port 1": "port",
+       "Value #A": "days left",
+       "Value #B": "valid for name"
+      }
+     }
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "days left",
+        "desc": false
+       }
+      ]
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "decimals": 1,
+     "noValue": "no TLS listeners configured for this vhost"
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "days left"
+      },
+      "properties": [
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "color": "red",
+           "value": null
+          },
+          {
+           "color": "orange",
+           "value": 14
+          },
+          {
+           "color": "green",
+           "value": 30
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-background"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "valid for name"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "yes",
+            "color": "green"
+           },
+           "0": {
+            "text": "WRONG CERT",
+            "color": "red"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-background"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 19,
+   "title": "$vhost \u2014 VIP MOVES",
+   "type": "stat",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 4,
+    "h": 5
+   },
+   "description": "How many times this vhost's serving role moved between the two nginx instances of its cluster, within the dashboard time range (failovers + failbacks, counted once each, observer-deduplicated). Exporter restarts can slightly inflate this via counter resets.",
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "${datasource}"
+     },
+     "refId": "A",
+     "instant": true,
+     "expr": "sum(max by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total{from_node!=\"\"}[$__range])) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=\"$vhost\"}))) or vector(0)",
+     "legendFormat": "in time range"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 3
+       },
+       {
+        "color": "red",
+        "value": 6
+       }
+      ]
+     },
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "reduceOptions": {
+     "calc": "lastNotNull"
+    }
+   }
+  }
+ ]
 }
