@@ -22,7 +22,15 @@ var (
 		"Histogram of $upstream_response_time per member (buckets give per-member percentiles).",
 		[]string{"vhost", "upstream_addr"}, nil)
 	upUpDesc = prometheus.NewDesc("nginx_fleet_upstream_up",
-		"1 if the most recent evidence for this member is a success.", []string{"vhost", "upstream_addr"}, nil)
+		"1 if the most recent evidence for this member is a success. Evidence-based, not a live probe: "+
+			"with no recent traffic the verdict is stale — gate alerts on the last_ok/last_fail timestamps.",
+		[]string{"vhost", "upstream_addr"}, nil)
+	upLastOKDesc = prometheus.NewDesc("nginx_fleet_upstream_last_ok_timestamp_seconds",
+		"Unix time of the last observed successful response from the member. Absent until a success is seen; "+
+			"now() minus this is the age of the up verdict.", []string{"vhost", "upstream_addr"}, nil)
+	upLastFailDesc = prometheus.NewDesc("nginx_fleet_upstream_last_fail_timestamp_seconds",
+		"Unix time of the last observed failure (next-upstream retry or 502-504 final) for the member. "+
+			"Absent until a failure is seen.", []string{"vhost", "upstream_addr"}, nil)
 	unattribDesc = prometheus.NewDesc("nginx_fleet_ingress_unattributed_total",
 		"Log lines that could not be attributed.", []string{"reason"}, nil)
 	ingressEnabledDesc = prometheus.NewDesc("nginx_fleet_ingress_enabled",
@@ -44,6 +52,8 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- upLastDesc
 	ch <- upTimeDesc
 	ch <- upUpDesc
+	ch <- upLastOKDesc
+	ch <- upLastFailDesc
 	ch <- unattribDesc
 	ch <- ingressEnabledDesc
 }
@@ -88,6 +98,12 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 			up = 1
 		}
 		ch <- prometheus.MustNewConstMetric(upUpDesc, prometheus.GaugeValue, up, k.vhost, k.addr)
+	}
+	for k, t := range s.UpstreamLastOK {
+		ch <- prometheus.MustNewConstMetric(upLastOKDesc, prometheus.GaugeValue, float64(t.Unix()), k.vhost, k.addr)
+	}
+	for k, t := range s.UpstreamLastFail {
+		ch <- prometheus.MustNewConstMetric(upLastFailDesc, prometheus.GaugeValue, float64(t.Unix()), k.vhost, k.addr)
 	}
 	for k, h := range s.UpstreamTimeHist {
 		buckets := map[float64]uint64{}
