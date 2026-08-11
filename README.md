@@ -345,7 +345,9 @@ count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open) 
 
 ## Grafana dashboard
 
-`deploy/grafana-dashboard.json` — import via UI or API. Three tiers:
+`deploy/grafana-dashboard.json` — import via UI or API, then pick your Prometheus
+data source from the dashboard's "data source" dropdown (no JSON editing needed;
+every panel resolves through the `$datasource` variable). Three tiers:
 
 - **NOC wall**: VIP holder (hostname + address), current master with live priority,
   split-brain / blackhole / idle-config alarms readable across a room.

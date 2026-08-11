@@ -17,12 +17,21 @@
   "templating": {
    "list": [
     {
+     "name": "datasource",
+     "label": "data source",
+     "type": "datasource",
+     "query": "prometheus",
+     "refresh": 1,
+     "current": {},
+     "hide": 0
+    },
+    {
      "name": "instance",
      "label": "nginx instance",
      "type": "query",
      "datasource": {
       "type": "prometheus",
-      "uid": "bfum9nnilgflsf"
+      "uid": "${datasource}"
      },
      "refresh": 2,
      "query": {
@@ -39,7 +48,7 @@
      "type": "query",
      "datasource": {
       "type": "prometheus",
-      "uid": "bfum9nnilgflsf"
+      "uid": "${datasource}"
      },
      "refresh": 2,
      "query": {
@@ -63,7 +72,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -75,7 +84,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "(label_replace(max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1, \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid, vip) max by (vrid, vip) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
       "legendFormat": "{{member_node}} ({{vip}})",
@@ -112,7 +121,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -124,7 +133,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "count(nginx_fleet_active == 1 unless on (instance) nginx_fleet_worker_fds_open) or vector(0)",
       "legendFormat": "master w/o nginx",
@@ -165,7 +174,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 16,
@@ -177,7 +186,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master) == 1) > 1) or vector(0)",
       "legendFormat": "vrids w/ 2 masters",
@@ -217,7 +226,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 6,
@@ -229,7 +238,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total[5m]))",
       "legendFormat": "of all requests",
@@ -272,7 +281,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 12,
@@ -284,7 +293,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds)) < 900) or vector(0)",
       "legendFormat": "members",
@@ -325,7 +334,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 20,
@@ -337,7 +346,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds)) > 432000) or vector(0)",
       "legendFormat": "decommission",
@@ -377,7 +386,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 18,
@@ -389,7 +398,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "count(up{job=\"nginx-fleet\"} == 0) or vector(0)",
       "legendFormat": "of fleet",
@@ -430,7 +439,7 @@
     "type": "nodeGraph",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -442,7 +451,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "refId": "A",
       "instant": true,
@@ -509,7 +518,7 @@
     "type": "table",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 14,
@@ -521,7 +530,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "",
@@ -567,7 +576,7 @@
     "type": "timeseries",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -579,7 +588,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (status_class) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{status_class}}",
@@ -608,7 +617,7 @@
     "type": "table",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -620,7 +629,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "max by (upstream_addr) (nginx_fleet_upstream_up{vhost=\"$vhost\"})",
       "legendFormat": "",
@@ -631,7 +640,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "",
@@ -642,7 +651,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "(time() - max by (upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=\"$vhost\"})) / 3600",
       "legendFormat": "",
@@ -755,7 +764,7 @@
     "type": "timeseries",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 12,
@@ -767,7 +776,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=\"$vhost\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}} latency",
@@ -776,7 +785,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}} {{reason}}",
@@ -796,7 +805,7 @@
     "type": "table",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -808,7 +817,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "max by (listen_port, tls, upstream_addr, config_file) (nginx_fleet_vhost_info{vhost=\"$vhost\"})",
       "legendFormat": "",
@@ -839,7 +848,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 6,
@@ -851,7 +860,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "refId": "A",
       "instant": true,
@@ -888,7 +897,7 @@
     "type": "bargauge",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -900,7 +909,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sort_desc(sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])))",
       "legendFormat": "{{upstream_addr}}",
@@ -948,7 +957,7 @@
     "type": "timeseries",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 8,
@@ -960,7 +969,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}}",
@@ -987,7 +996,7 @@
     "type": "timeseries",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 16,
@@ -999,7 +1008,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=\"$vhost\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}} latency",
@@ -1008,7 +1017,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
       "legendFormat": "{{upstream_addr}} failures/s",
@@ -1017,7 +1026,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "refId": "C",
       "expr": "histogram_quantile(0.99, sum by (upstream_addr, le) (rate(nginx_fleet_upstream_response_seconds_bucket{vhost=\"$vhost\"}[10m])))",
@@ -1065,7 +1074,7 @@
     "type": "table",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -1078,7 +1087,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "refId": "A",
       "instant": true,
@@ -1088,7 +1097,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "refId": "B",
       "instant": true,
@@ -1223,7 +1232,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 12,
@@ -1236,7 +1245,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "refId": "A",
       "instant": true,
@@ -1281,7 +1290,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 0,
@@ -1293,7 +1302,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "min(nginx_fleet_ingress_enabled) or vector(0)",
       "legendFormat": "enabled",
@@ -1334,7 +1343,7 @@
     "type": "stat",
     "datasource": {
      "type": "prometheus",
-     "uid": "bfum9nnilgflsf"
+     "uid": "${datasource}"
     },
     "gridPos": {
      "x": 6,
@@ -1346,7 +1355,7 @@
      {
       "datasource": {
        "type": "prometheus",
-       "uid": "bfum9nnilgflsf"
+       "uid": "${datasource}"
       },
       "expr": "max by (version, commit) (nginx_fleet_build_info)",
       "legendFormat": "{{version}} ({{commit}})",
