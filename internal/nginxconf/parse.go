@@ -39,6 +39,14 @@ func (c *Config) Backends(s Server) []string {
 		return nil
 	}
 	host := passHost(s.Pass)
+	// A $variable pass target is resolved per-request inside nginx; the
+	// config cannot say where traffic goes. Emitting the literal "$name"
+	// would seed a fake member that never matches log-observed addresses
+	// and false-fires decommission alerts. Runtime identity for these
+	// vhosts comes from the ingress collector's access-log evidence.
+	if strings.HasPrefix(host, "$") {
+		return nil
+	}
 	if members, ok := c.Upstreams[host]; ok {
 		return members
 	}

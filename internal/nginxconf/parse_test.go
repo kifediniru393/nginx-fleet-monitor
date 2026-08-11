@@ -67,3 +67,20 @@ func TestServers(t *testing.T) {
 		t.Fatalf("legacy backends = %v", got)
 	}
 }
+
+func TestBackendsVariablePassIsDynamic(t *testing.T) {
+	cfg := Parse(`
+http {
+    server {
+        server_name dyn.example.com;
+        listen 443 ssl;
+        proxy_pass https://$lyftloyaltywallet;
+    }
+}`)
+	if len(cfg.Servers) != 1 {
+		t.Fatalf("servers = %d", len(cfg.Servers))
+	}
+	if got := cfg.Backends(cfg.Servers[0]); got != nil {
+		t.Fatalf("variable pass target leaked as backend: %v", got)
+	}
+}
