@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -44,7 +45,13 @@ func main() {
 	stateFile := flag.String("ingress.state-file", "/var/lib/nginx-fleet-exporter/state.json", "idle-clock persistence; empty disables")
 	stubURI := flag.String("stub.scrape-uri", "", "nginx stub_status URL; emits official nginx-prometheus-exporter compatible metrics (nginx_up, nginx_connections_*); empty disables")
 	decommissionWindow := flag.Duration("decommission-window", 120*time.Hour, "idle window after which an upstream is a decommission candidate (informational; consumed by recording rules)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("nginx-fleet-exporter %s (commit %s, built %s, %s)\n", version, commit, date, runtime.Version())
+		return
+	}
 
 	hostname, _ := os.Hostname()
 	if hostname == "" {
