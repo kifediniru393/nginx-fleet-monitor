@@ -42,10 +42,10 @@ var (
 		"Cluster membership from local keepalived.conf: this node participates in the VRID. "+
 			"Passive VRRP cannot see silent backups; membership comes from config, mastership from the wire. "+
 			"Group clusters by (segment, vrid): VRIDs are only unique per L2 segment.",
-		[]string{"vrid", "vip", "member_node", "instance", "segment"}, nil)
+		[]string{"vrid", "vip", "member_node", "vrrp_instance", "segment"}, nil)
 	unicastDesc = prometheus.NewDesc("nginx_fleet_vrrp_unicast_configured",
 		"1 if the instance uses unicast_peer: peer adverts may not be visible to multicast observers.",
-		[]string{"vrid", "instance"}, nil)
+		[]string{"vrid", "vrrp_instance"}, nil)
 	activeDesc = prometheus.NewDesc("nginx_fleet_active",
 		"1 if this node is currently the active/serving node.", []string{"node", "method"}, nil)
 )

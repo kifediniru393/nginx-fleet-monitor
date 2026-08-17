@@ -37,10 +37,11 @@
      "query": "label_values(nginx_fleet_vhost_info, instance)",
      "refId": "vi"
     },
-    "includeAll": false,
-    "multi": false,
+    "includeAll": true,
+    "multi": true,
     "current": {},
-    "sort": 1
+    "sort": 1,
+    "allValue": ".*"
    },
    {
     "name": "vhost",
@@ -51,13 +52,15 @@
     },
     "refresh": 2,
     "query": {
-     "query": "label_values(nginx_fleet_vhost_info{instance=\"$instance\"}, vhost)",
+     "query": "label_values({__name__=~\"nginx_fleet_(vhost_info|ingress_requests_total)\"}, vhost)",
      "refId": "var"
     },
-    "includeAll": false,
-    "multi": false,
+    "includeAll": true,
+    "multi": true,
     "current": {},
-    "regex": "/^(?!_$)(?![0-9.]+$).*/"
+    "regex": "/^[^*~]/",
+    "description": "Wildcard (*.example.com) and regex-named server blocks are excluded: their traffic attributes to concrete Host headers, which appear here once observed.",
+    "allValue": ".*"
    }
   ]
  },
@@ -85,8 +88,8 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "(label_replace(max by (vrid, vip, node) (nginx_fleet_vrrp_master) == 1, \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid, vip) max by (vrid, vip) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
-     "legendFormat": "{{member_node}} ({{vip}})",
+     "expr": "max by (vrid, node) (nginx_fleet_vrrp_master == 1) and on (vrid) max by (vrid) (nginx_fleet_cluster_info{instance=~\"${instance:pipe}\"} and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\"}))",
+     "legendFormat": "{{node}} \u2014 vrid {{vrid}}",
      "instant": true,
      "refId": "A"
     }
@@ -112,7 +115,7 @@
      "calc": "lastNotNull"
     }
    },
-   "description": "The node currently holding the VIP that serves the selected vhost. Exactly one entry when healthy; two entries for the same vrid = split brain."
+   "description": "Node currently advertising as VRRP master for the selected vhost's cluster, observed on the wire (one row per VRID; node is the advert source address). Gated to VRIDs the selected instance participates in and vhosts it serves."
   },
   {
    "id": 2,
@@ -134,7 +137,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "count(nginx_fleet_active{instance=~\"$instance\"} == 1 unless on (instance) nginx_fleet_worker_fds_open{instance=~\"$instance\"}) or vector(0)",
+     "expr": "count(nginx_fleet_active{instance=~\"${instance:pipe}\"} == 1 unless on (instance) nginx_fleet_worker_fds_open{instance=~\"${instance:pipe}\"}) or vector(0)",
      "legendFormat": "master w/o nginx",
      "instant": true,
      "refId": "A"
@@ -187,7 +190,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master{instance=~\"$instance\"}) == 1) > 1) or vector(0)",
+     "expr": "count(count by (vrid) (max by (vrid, node) (nginx_fleet_vrrp_master{instance=~\"${instance:pipe}\"}) == 1) > 1) or vector(0)",
      "legendFormat": "vrids w/ 2 masters",
      "instant": true,
      "refId": "A"
@@ -217,7 +220,8 @@
     "reduceOptions": {
      "calc": "lastNotNull"
     }
-   }
+   },
+   "description": "More than one node advertising as VRRP master for the same VRID, heard on the wire. Anything above 0 means both pair members think they own the VIP: clients split between them, state diverges. Usually a network partition or keepalived misconfig. Investigate immediately; this is the one number on this wall that should always be 0."
   },
   {
    "id": 4,
@@ -239,7 +243,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\", status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"$vhost\"}[5m]))",
+     "expr": "100 * (sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"${vhost:pipe}\", status_class=\"5xx\"}[5m])) or vector(0)) / sum(rate(nginx_fleet_ingress_requests_total{vhost=~\"${vhost:pipe}\"}[5m]))",
      "legendFormat": "of all requests",
      "instant": true,
      "refId": "A"
@@ -261,7 +265,8 @@
       ]
      },
      "unit": "percent",
-     "decimals": 1
+     "decimals": 1,
+     "noValue": "no traffic observed since exporter start"
     },
     "overrides": []
    },
@@ -294,7 +299,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up{vhost=~\"$vhost\"}) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds{vhost=~\"$vhost\"})) < 900) or vector(0)",
+     "expr": "count(max by (vhost, upstream_addr) (nginx_fleet_upstream_up{vhost=~\"${vhost:pipe}\"}) == 0 and (time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_fail_timestamp_seconds{vhost=~\"${vhost:pipe}\"})) < 900) or vector(0)",
      "legendFormat": "members",
      "instant": true,
      "refId": "A"
@@ -314,7 +319,8 @@
         "value": 1
        }
       ]
-     }
+     },
+     "noValue": "no traffic observed since exporter start"
     },
     "overrides": []
    },
@@ -347,7 +353,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=~\"$vhost\"})) > 432000) or vector(0)",
+     "expr": "count((time() - max by (vhost, upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=~\"${vhost:pipe}\"})) > 432000) or vector(0)",
      "legendFormat": "decommission",
      "instant": true,
      "refId": "A"
@@ -367,7 +373,8 @@
         "value": 1
        }
       ]
-     }
+     },
+     "noValue": "no traffic observed since exporter start"
     },
     "overrides": []
    },
@@ -377,7 +384,8 @@
     "reduceOptions": {
      "calc": "lastNotNull"
     }
-   }
+   },
+   "description": "Upstream members of the selected vhost(s) with no observed traffic for over 5 days (the --decommission-window). The idle clock counts from last observed request and survives exporter restarts; configured-but-never-used members are seeded from config so they age too. A member idle this long is a decommission candidate: config says it exists, evidence says nothing uses it."
   },
   {
    "id": 7,
@@ -399,7 +407,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "count(up{instance=~\"$instance\", job=\"nginx-fleet\"} == 0) or vector(0)",
+     "expr": "count(up{instance=~\"${instance:pipe}\", job=\"nginx-fleet\"} == 0) or vector(0)",
      "legendFormat": "of fleet",
      "instant": true,
      "refId": "A"
@@ -452,14 +460,16 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "refId": "A",
-     "instant": true,
+     "expr": "(sum by (source, target) (label_replace(label_replace((sum by (vhost) (rate(nginx_fleet_ingress_requests_total{vhost=~\"${vhost:pipe}\"}[5m])) or max by (vhost) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\"}) * 0) * on (vhost) group_left (listen_addr) topk by (vhost) (1, max by (vhost, listen_addr) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\", listen_addr!=\"\"})), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"listen_addr\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace((sum by (vhost, upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=~\"${vhost:pipe}\"}[5m])) or max by (vhost, upstream_addr) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\", upstream_addr!=\"\"}) * 0) * on (vhost) group_left (listen_addr) topk by (vhost) (1, max by (vhost, listen_addr) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\", listen_addr!=\"\"})), \"source\", \"$1\", \"listen_addr\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace((sum by (vhost, instance) (rate(nginx_fleet_ingress_requests_total{vhost=~\"${vhost:pipe}\"}[5m])) unless on (vhost) max by (vhost) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\", listen_addr!=\"\"})) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"vip\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace((sum by (vhost, upstream_addr, instance) (rate(nginx_fleet_upstream_requests_total{vhost=~\"${vhost:pipe}\"}[5m])) unless on (vhost) max by (vhost) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\", listen_addr!=\"\"})) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vip\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")))",
      "format": "table",
-     "expr": "(sum by (source, target) (label_replace(label_replace(sum by (vhost, instance) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vhost\", \"(.*)\"), \"target\", \"$1\", \"vip\", \"(.*)\"))) or (sum by (source, target) (label_replace(label_replace(sum by (upstream_addr, instance) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m])) * on (instance) group_left (vip) max by (instance, vip) (nginx_fleet_cluster_info), \"source\", \"$1\", \"vip\", \"(.*)\"), \"target\", \"$1\", \"upstream_addr\", \"(.*)\")))"
+     "instant": true,
+     "refId": "A"
     }
    ],
    "fieldConfig": {
-    "defaults": {},
+    "defaults": {
+     "noValue": "no traffic observed since exporter start"
+    },
     "overrides": [
      {
       "matcher": {
@@ -509,7 +519,7 @@
     },
     "nodes": {}
    },
-   "description": "Request flow for the selected vhost: clients resolve the vhost name to its cluster VIP, the VIP holder's nginx proxies to the upstream members. Edge numbers are req/s. Non-VIP deployments (no keepalived) show no VIP hop."
+   "description": "Traffic flows vhost -> listen VIP -> upstream members; weights are req/s from access-log evidence, zero-weight edges are configured-but-quiet. Vhosts without an address-bound listener draw direct vhost -> upstream edges."
   },
   {
    "id": 10,
@@ -531,7 +541,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "sum by (status_class) (rate(nginx_fleet_ingress_requests_total{vhost=\"$vhost\"}[5m]))",
+     "expr": "sum by (status_class) (rate(nginx_fleet_ingress_requests_total{vhost=~\"${vhost:pipe}\"}[5m]))",
      "legendFormat": "{{status_class}}",
      "refId": "A"
     }
@@ -544,13 +554,15 @@
       "stacking": {
        "mode": "normal"
       }
-     }
+     },
+     "noValue": "no traffic observed since exporter start"
     },
     "overrides": []
    },
    "repeat": "vhost",
    "repeatDirection": "h",
-   "maxPerRow": 3
+   "maxPerRow": 3,
+   "description": "Request rate for the selected vhost(s) by status class (2xx-5xx), from the fleet access log. A rising 5xx band with steady 2xx = backend failures; total collapsing to zero = traffic stopped reaching this vhost entirely (check VIP HOLDER and topology)."
   },
   {
    "id": 11,
@@ -572,7 +584,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "max by (upstream_addr) (nginx_fleet_upstream_up{vhost=\"$vhost\"})",
+     "expr": "max by (upstream_addr) (nginx_fleet_upstream_up{vhost=~\"${vhost:pipe}\"})",
      "legendFormat": "",
      "instant": true,
      "format": "table",
@@ -583,7 +595,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=~\"${vhost:pipe}\"}[5m]))",
      "legendFormat": "",
      "instant": true,
      "format": "table",
@@ -594,7 +606,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "(time() - max by (upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=\"$vhost\"})) / 3600",
+     "expr": "(time() - max by (upstream_addr) (nginx_fleet_upstream_last_traffic_timestamp_seconds{vhost=~\"${vhost:pipe}\"})) / 3600",
      "legendFormat": "",
      "instant": true,
      "format": "table",
@@ -603,7 +615,8 @@
    ],
    "fieldConfig": {
     "defaults": {
-     "decimals": 2
+     "decimals": 2,
+     "noValue": "no traffic observed since exporter start"
     },
     "overrides": [
      {
@@ -697,7 +710,8 @@
       }
      }
     }
-   ]
+   ],
+   "description": "Every upstream member observed serving the selected vhost(s): request total (includes proxy_next_upstream retries, so a member being hammered by retry storms shows its true received load), failure count, evidence-based up/down, and time since last traffic."
   },
   {
    "id": 12,
@@ -719,7 +733,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=\"$vhost\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_response_seconds_sum{vhost=~\"${vhost:pipe}\"}[5m])) / sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=~\"${vhost:pipe}\"}[5m]))",
      "legendFormat": "{{upstream_addr}} latency",
      "refId": "A"
     },
@@ -728,17 +742,19 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "sum by (upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total{vhost=\"$vhost\"}[5m]))",
+     "expr": "sum by (upstream_addr, reason) (rate(nginx_fleet_upstream_failures_total{vhost=~\"${vhost:pipe}\"}[5m]))",
      "legendFormat": "{{upstream_addr}} {{reason}}",
      "refId": "B"
     }
    ],
    "fieldConfig": {
     "defaults": {
-     "unit": "s"
+     "unit": "s",
+     "noValue": "no traffic observed since exporter start"
     },
     "overrides": []
-   }
+   },
+   "description": "Per-member response time (from $upstream_response_time) alongside failure rate by reason (next_upstream = skipped mid-request via retry, http_502/503/504 = failed final). Latency climbing while failures stay flat = saturation; failures without latency = fast rejects (connection refused, sealed vault, dead port)."
   },
   {
    "id": 13,
@@ -760,7 +776,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "max by (listen_port, tls, upstream_addr, config_file) (nginx_fleet_vhost_info{vhost=\"$vhost\"})",
+     "expr": "max by (listen_port, tls, upstream_addr, config_file) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\"})",
      "legendFormat": "",
      "instant": true,
      "format": "table",
@@ -781,7 +797,8 @@
       }
      }
     }
-   ]
+   ],
+   "description": "The intended topology from the parsed nginx config: every listener and configured backend for the selected vhost(s), with the config file that defines it. Compare against the upstream members table: configured here but absent there = never receives traffic; there but not here = config drift or stale DNS."
   },
   {
    "id": 14,
@@ -805,8 +822,8 @@
      },
      "refId": "A",
      "instant": true,
-     "expr": "(label_replace(max by (vrid, node) (nginx_fleet_vrrp_priority), \"instance\", \"$1\", \"node\", \"(.*)\") * on (vrid, instance) group_left (member_node) max by (vrid, instance, member_node) (nginx_fleet_cluster_info)) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) nginx_fleet_vhost_info{vhost=\"$vhost\"})",
-     "legendFormat": "{{member_node}} \u2014 vrid {{vrid}}, priority"
+     "expr": "max by (vrid, node) (nginx_fleet_vrrp_priority) and on (vrid) max by (vrid) (nginx_fleet_cluster_info{instance=~\"${instance:pipe}\"} and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\"}))",
+     "legendFormat": "{{node}} \u2014 vrid {{vrid}}, priority"
     }
    ],
    "fieldConfig": {
@@ -830,7 +847,7 @@
      "calc": "lastNotNull"
     }
    },
-   "description": "Master of the selected vhost's cluster, with its live advertised priority. A drop (e.g. 150\u219290) means the nginx health check demoted it."
+   "description": "Advertised priority of the current master for the selected vhost's cluster. Watch it drop when a health check demotes a node."
   },
   {
    "id": 16,
@@ -852,7 +869,7 @@
       "type": "prometheus",
       "uid": "${datasource}"
      },
-     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=\"$vhost\"}[5m]))",
+     "expr": "sum by (upstream_addr) (rate(nginx_fleet_upstream_requests_total{vhost=~\"${vhost:pipe}\"}[5m]))",
      "legendFormat": "{{upstream_addr}}",
      "refId": "A"
     }
@@ -865,7 +882,8 @@
       "stacking": {
        "mode": "normal"
       }
-     }
+     },
+     "noValue": "no traffic observed since exporter start"
     },
     "overrides": []
    },
@@ -885,7 +903,7 @@
     "w": 24,
     "h": 7
    },
-   "description": "Certificate actually served for each TLS vhost, probed via SNI on every node. Rows for the same vhost with different expiry = certificate drift between HA pair members \u2014 a failover would change what clients see. 'valid for name' 0 = wrong cert served entirely.",
+   "description": "Certificate actually served per pair member (SNI probe against the local listener). Rows disagreeing = drift between pair members. Negative days = expired. Standbys skip listeners bound to a VIP they don't hold, so one row per vhost is normal on address-bound listeners.",
    "targets": [
     {
      "datasource": {
@@ -895,7 +913,7 @@
      "refId": "A",
      "instant": true,
      "format": "table",
-     "expr": "(nginx_fleet_vhost_cert_expiry_timestamp_seconds{vhost=\"$vhost\"} - time()) / 86400"
+     "expr": "(max by (vhost, instance, listen_port) (nginx_fleet_vhost_cert_expiry_timestamp_seconds{vhost=~\"${vhost:pipe}\"}) - time()) / 86400"
     },
     {
      "datasource": {
@@ -905,7 +923,7 @@
      "refId": "B",
      "instant": true,
      "format": "table",
-     "expr": "nginx_fleet_vhost_cert_san_match{vhost=\"$vhost\"}"
+     "expr": "max by (vhost, instance, listen_port) (nginx_fleet_vhost_cert_san_match{vhost=~\"${vhost:pipe}\"})"
     }
    ],
    "transformations": [
@@ -1052,7 +1070,7 @@
      },
      "refId": "A",
      "instant": true,
-     "expr": "sum(max by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total{from_node!=\"\"}[$__range])) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=\"$vhost\"}))) or vector(0)",
+     "expr": "sum(max by (vrid, from_node, to_node) (increase(nginx_fleet_vrrp_transitions_total{from_node!=\"\"}[$__range])) and on (vrid) max by (vrid) (nginx_fleet_cluster_info and on (instance) max by (instance) (nginx_fleet_vhost_info{vhost=~\"${vhost:pipe}\"}))) or vector(0)",
      "legendFormat": "in time range"
     }
    ],
