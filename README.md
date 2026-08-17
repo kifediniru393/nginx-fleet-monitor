@@ -177,6 +177,108 @@ nginx is warm and ready *before* the VIP arrives.
 
 ## Quick start
 
+One command per fleet, run from any machine with Go and ssh access to the hosts:
+
+```sh
+deploy/deploy.sh root@HOST1 root@HOST2 ...
+```
+
+The script builds a stamped static binary, ships it with the systemd unit, nginx
+drop-ins and logrotate config, creates the `nginx-exporter` user, reloads nginx,
+enables/restarts the service, and verifies `/metrics` answers — per host, and
+idempotently, so the same command is also the upgrade path. `GOARCH=arm64` cross-
+builds; `SKIP_BUILD=1` ships an existing `./nginx-fleet-exporter` binary (e.g. one
+downloaded from GitHub Releases); `NGINX_BIN=/usr/local/nginx/sbin/nginx` points at
+a source-built nginx that isn't on the remote PATH. After reloading, the script
+checks the assembled config (`nginx -T`) actually picked up the drop-ins and warns
+if `nginx.conf` lacks the `include /etc/nginx/conf.d/*.conf;` line (stock on distro
+packages, often absent on source builds).
+
+### Worked example: deploying to a keepalived pair
+
+Setup: two load balancers, `lb-svr1` (192.168.2.152) and `lb-svr2` (192.168.2.153),
+sharing VIP 192.168.2.154 on VRID 51. Run the deploy from any machine — a laptop or
+a bastion — that has this repo cloned, Go installed, and root SSH access to both
+load balancers. (No Go on that machine? Untar a release — it bundles `deploy/` —
+and run the same command with `SKIP_BUILD=1`.)
+
+```sh
+deploy/deploy.sh root@192.168.2.152 root@192.168.2.153
+```
+
+**Build phase** (once, locally):
+
+```
+>>> building nginx-fleet-exporter (linux/amd64, static)
+```
+
+A `CGO_ENABLED=0` build with ldflags stamping version (from `git describe`, e.g.
+`v0.2.0-3-g9695d16`), commit, and date. Static, so it runs on any glibc on the targets.
+
+**Per host — ship and install:**
+
+```
+>>> deploying to root@192.168.2.152
+```
+
+One `scp` stages the binary plus the four config files in `/tmp/nginx-fleet-deploy/`,
+then a remote script runs, in order:
+
+1. `useradd -r nginx-exporter` — skipped if the user exists — and `usermod -aG adm`
+   so it can read nginx logs.
+2. `install(1)` places each file: binary → `/usr/local/bin/`, unit →
+   `/etc/systemd/system/`, drop-ins → `/etc/nginx/conf.d/`, logrotate →
+   `/etc/logrotate.d/nginx-fleet`. `install` replaces atomically, so a running
+   exporter's binary swaps without "text file busy".
+3. `nginx -t` validates **before** reload — if a drop-in breaks the config, the
+   deployment stops here and nginx keeps serving on its old config.
+4. `nginx -s reload` — nginx starts writing the JSON fleet log and serving
+   `stub_status` on 127.0.0.1:8081.
+5. `systemctl daemon-reload`, `enable --now`, then `restart` — the restart is what
+   makes a re-run an upgrade: an already-running exporter picks up the new binary.
+
+**Per host — verify:**
+
+```
+>>> verifying root@192.168.2.152
+nginx_fleet_build_info{version="v0.2.0-3-g9695d16",commit="9695d16",date="2026-08-14",goversion="go1.24.x"} 1
+```
+
+The script curls `:9942/metrics` and prints `build_info` — proof of exactly which
+build landed. On failure it prints the tail of `systemctl status` and exits nonzero,
+so the next host isn't attempted on top of a broken state. Then the same sequence
+runs for 192.168.2.153, and:
+
+```
+>>> done: 2 host(s) deployed
+```
+
+**Sanity-check the correlation is live:**
+
+```sh
+curl -s http://192.168.2.152:9942/metrics | grep vrrp_master
+# nginx_fleet_vrrp_master{vrid="51", node="192.168.2.152", vip="192.168.2.154", observer="lb-svr1"} 1
+curl -s http://192.168.2.153:9942/metrics | grep vrrp_master
+# same fact, observer="lb-svr2" — the standby witnesses the master too
+```
+
+Both nodes reporting the same master means the passive VRRP listener is working on
+both. Traffic metrics appear as soon as vhost requests hit the fleet log.
+
+**Upgrades:** run the same command again. The build stamps the new version,
+`install` swaps the binary, `systemctl restart` picks it up, and idle-clock state
+survives via `StateDirectory=` — the verify output's `build_info` proves the new
+version is live. Fleet-wide skew shows up in one `nginx_fleet_build_info` query.
+
+**Not covered by the script** (separate, one-time steps):
+
+- Alert rules to the vmalert host: `deploy/deploy-rules.sh root@ALERT_HOST`
+- Grafana dashboard: import `deploy/grafana-dashboard.json` via the UI
+- Prometheus/VictoriaMetrics scrape config for the `:9942` targets
+
+<details>
+<summary>Manual steps (what the script does under the hood)</summary>
+
 ```sh
 # Preferred: a stamped static binary from GitHub Releases (amd64/arm64).
 # `nginx-fleet-exporter --version` then identifies exactly what is deployed.
@@ -203,6 +305,8 @@ ssh root@HOST '
 
 curl -s http://HOST:9942/metrics | grep nginx_fleet_
 ```
+
+</details>
 
 The logging drop-in works because stock nginx setups `include /etc/nginx/conf.d/*.conf`
 inside `http {}`, and nginx writes to *every* configured `access_log` — existing logs
@@ -243,7 +347,7 @@ declares its own `access_log` overrides the http-level one and won't appear in t
 | `nginx_fleet_vrrp_stepdowns_total` | vrid, observer | graceful priority-0 stepdowns (edge-counted): the "VIP is about to move" early warning |
 | `nginx_fleet_vrrp_stepdown` | vrid, node, observer | instantaneous stepdown gauge (often too brief to scrape — use the counter) |
 | `nginx_fleet_vrrp_transitions_dropped_total` | observer | transition observations discarded by the cardinality cap (advert-spoofing flood guard) |
-| `nginx_fleet_cluster_info` | vrid, vip, member_node, instance, segment | membership from local keepalived.conf; passive VRRP cannot see silent backups, so membership comes from config, mastership from the wire. Group clusters by `(segment, vrid)` — VRIDs are only unique per L2 segment |
+| `nginx_fleet_cluster_info` | vrid, vip, member_node, vrrp_instance, segment | membership from local keepalived.conf; passive VRRP cannot see silent backups, so membership comes from config, mastership from the wire. Group clusters by `(segment, vrid)` — VRIDs are only unique per L2 segment |
 | `nginx_fleet_vrrp_unicast_configured` | vrid, instance | 1 if the instance uses `unicast_peer` |
 | `nginx_fleet_active` | node, method | 1 if this node is currently serving (`method="vrrp"` from master state; `"static"` when no VRRP) |
 
